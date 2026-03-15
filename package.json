@@ -1,0 +1,15 @@
+{
+  "name": "pixel-browser",
+  "version": "1.0.0",
+  "description": "Browse, tag, and search pixel art assets",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  },
+  "dependencies": {
+    "minimatch": "^10.0.0"
+  }
+}

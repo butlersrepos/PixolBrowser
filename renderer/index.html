@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pixel Browser</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <button id="btn-open" title="Choose Directory">Open Folder</button>
+    <div id="toolbar-spacer"></div>
+    <input type="text" id="search-input" placeholder="Search by filename or path..." />
+    <button id="btn-rules" title="Manage auto-tag rules and exclusions">Rules</button>
+    <button id="btn-settings" title="Settings">&#9881;</button>
+  </div>
+
+
+  <!-- Open Folder Modal -->
+  <div id="open-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" style="width: 500px;">
+      <div class="modal-header">
+        <h2>Open Folder</h2>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="open-path-row">
+          <button id="open-browse-btn" class="btn-secondary">Browse...</button>
+          <span id="open-path-display" class="open-path-text">No folder selected</span>
+        </div>
+        <label class="open-checkbox-row">
+          <input type="checkbox" id="open-recursive" checked /> Scan subfolders recursively
+        </label>
+        <div id="open-preview" class="open-preview hidden">
+          <span id="open-preview-icon" class="spinner-small"></span>
+          <span id="open-preview-text"></span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="open-confirm-btn" class="btn-primary" disabled>Load Images</button>
+        <button id="open-cancel-btn" class="btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Layout -->
+  <div id="main">
+    <!-- Sidebar: Tags -->
+    <div id="sidebar">
+      <div id="sidebar-header">Tags</div>
+      <div id="tag-list">
+        <div class="tag-item active" data-filter="all">
+          <span class="tag-name">All Images</span>
+          <span class="tag-count" id="count-all">0</span>
+        </div>
+        <div class="tag-item" data-filter="untagged">
+          <span class="tag-name">Untagged</span>
+          <span class="tag-count" id="count-untagged">0</span>
+        </div>
+        <div id="tag-list-custom"></div>
+      </div>
+      <div id="sidebar-actions">
+        <button id="btn-inspect" class="sidebar-action-btn" disabled title="Open selected images in carousel (Enter)">
+          &#128269; Inspect <span id="inspect-badge" class="inspect-badge" style="display:none"></span>
+        </button>
+        <div id="inspect-hint" class="sidebar-hint">Select images to inspect</div>
+
+      </div>
+    </div>
+
+    <!-- Image Grid -->
+    <div id="grid-container">
+      <div id="grid-status"></div>
+    </div>
+
+    <!-- Detail Panel (always visible) -->
+    <div id="detail-panel">
+      <div id="detail-empty" class="detail-empty-state">
+        <div class="detail-empty-icon">&#9698;</div>
+        <div>Select an image to view details</div>
+        <div class="detail-empty-hint">Cmd+Click to multi-select</div>
+      </div>
+      <div id="detail-content" class="hidden">
+        <div id="detail-image-wrapper">
+          <img id="detail-image" />
+          <button id="btn-reset-view" title="Reset zoom &amp; position">&#8982;</button>
+        </div>
+        <div id="detail-info">
+          <div id="detail-filename-row">
+            <div id="detail-filename"></div>
+            <button id="btn-copy-name" class="btn-icon" title="Copy filename">&#9112;</button>
+          </div>
+          <div id="detail-path"></div>
+          <div id="detail-meta"></div>
+          <div id="detail-tags-section">
+            <div id="detail-tags-label">Tags</div>
+            <div id="detail-tags"></div>
+            <div id="detail-tag-input-wrapper">
+              <input type="text" id="detail-tag-input" placeholder="Add tag..." />
+              <div id="tag-autocomplete" class="hidden"></div>
+            </div>
+          </div>
+          <button id="btn-exclude" class="btn-danger">Exclude This Image</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Carousel Overlay -->
+  <div id="carousel" class="hidden">
+    <div id="carousel-panel">
+      <div id="carousel-titlebar">
+        <span id="carousel-filename"></span>
+        <span id="carousel-counter"></span>
+        <div class="carousel-titlebar-spacer"></div>
+        <button id="carousel-copy-file" class="carousel-titlebar-btn carousel-text-btn" title="Copy file to clipboard">&#128203; Copy File</button>
+        <button id="carousel-reset" class="carousel-titlebar-btn" title="Reset zoom">&#8982;</button>
+        <button id="carousel-close" class="carousel-titlebar-btn" title="Close (Esc)">&times;</button>
+      </div>
+      <div id="carousel-image-wrapper">
+        <img id="carousel-image" />
+      </div>
+      <button id="carousel-prev" class="carousel-btn carousel-btn-prev" title="Previous (Left arrow)">&#8249;</button>
+      <button id="carousel-next" class="carousel-btn carousel-btn-next" title="Next (Right arrow)">&#8250;</button>
+    </div>
+  </div>
+
+  <!-- Rules Modal -->
+  <div id="rules-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Auto-Tag Rules &amp; Exclusions</h2>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <section>
+          <h3>Auto-Tag Rules</h3>
+          <p class="help-text">Files matching the glob pattern will automatically receive the specified tags. These tags are applied dynamically and only exist within this app &mdash; they don't modify your files. To permanently tag an image, add the tag manually via the details panel.</p>
+          <div id="rules-list"></div>
+          <button id="btn-add-rule" class="btn-secondary">+ Add Rule</button>
+        </section>
+        <section>
+          <h3>Exclude Patterns</h3>
+          <p class="help-text">Files matching these glob patterns will be hidden from the gallery. Your files are not affected &mdash; exclusions only apply within this app.</p>
+          <div id="exclude-list"></div>
+          <button id="btn-add-exclude" class="btn-secondary">+ Add Exclude Pattern</button>
+        </section>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-apply-rules" class="btn-primary">Save &amp; Apply Rules</button>
+        <button id="btn-cancel-rules" class="btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content settings-modal-content">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="settings-layout">
+        <div class="settings-nav">
+          <div class="settings-nav-item active" data-section="theme">Theme</div>
+        </div>
+        <div class="settings-body">
+          <!-- Theme Section -->
+          <div id="settings-theme" class="settings-section">
+            <div class="settings-group">
+              <h4 class="settings-group-label">Presets</h4>
+              <div id="theme-presets" class="preset-list"></div>
+            </div>
+            <div class="settings-group">
+              <h4 class="settings-group-label">Saved Themes</h4>
+              <div class="theme-actions-row">
+                <button id="theme-save-btn" class="btn-secondary btn-sm">Save Current</button>
+                <button id="theme-export-btn" class="btn-secondary btn-sm">Export</button>
+                <button id="theme-import-btn" class="btn-secondary btn-sm">Import</button>
+                <input type="file" id="theme-import-file" accept=".json" style="display:none" />
+              </div>
+              <div id="theme-import-feedback" class="theme-feedback hidden"></div>
+              <div id="theme-saved-list" class="saved-themes-list"></div>
+            </div>
+            <div id="theme-color-groups"></div>
+            <div class="settings-group" style="margin-top: 12px;">
+              <button id="theme-reset-btn" class="btn-secondary btn-sm">Reset to Default</button>
+              <button id="theme-copy-btn" class="btn-secondary btn-sm">Copy as JSON</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scan Progress Overlay -->
+  <div id="scan-overlay" class="hidden">
+    <div id="scan-content">
+      <div class="spinner"></div>
+      <div id="scan-text">Scanning...</div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
