@@ -11,9 +11,13 @@
   <div id="toolbar">
     <button id="btn-open" title="Choose Directory">Open Folder</button>
     <div id="toolbar-spacer"></div>
-    <input type="text" id="search-input" placeholder="Search by filename or path..." />
+    <div id="search-wrapper">
+      <input type="text" id="search-input" placeholder="Search by filename or path..." />
+      <button id="btn-search-clear" class="search-clear hidden" title="Clear search">&times;</button>
+    </div>
+    <div class="toolbar-divider"></div>
     <button id="btn-rules" title="Manage auto-tag rules and exclusions">Rules</button>
-    <button id="btn-settings" title="Settings">&#9881;</button>
+    <button id="btn-settings" title="Settings">Settings</button>
   </div>
 
 
@@ -116,6 +120,9 @@
         <span id="carousel-counter"></span>
         <div class="carousel-titlebar-spacer"></div>
         <button id="carousel-copy-file" class="carousel-titlebar-btn carousel-text-btn" title="Copy file to clipboard">&#128203; Copy File</button>
+        <label class="carousel-bg-picker" title="Background color">
+          <input type="color" id="carousel-bg-input" class="color-input" />
+        </label>
         <button id="carousel-reset" class="carousel-titlebar-btn" title="Reset zoom">&#8982;</button>
         <button id="carousel-close" class="carousel-titlebar-btn" title="Close (Esc)">&times;</button>
       </div>

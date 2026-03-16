@@ -15,6 +15,9 @@ const state = {
 
 let grid = null;
 let saveTimeout = null;
+let searchDebounce = null;
+let cachedVisibleImages = null; // images after excludes, before tag/search filters
+let lowercaseIndex = null; // Map<imagePath, lowercasedPath> for fast search
 
 // ===== Tag Colors =====
 function tagColor(tag) {
@@ -190,18 +193,31 @@ class VirtualGrid {
 }
 
 // ===== Filtering =====
-function applyFilters() {
+function invalidateVisibleCache() {
+  cachedVisibleImages = null;
+}
+
+function getVisibleImages() {
+  if (cachedVisibleImages) return cachedVisibleImages;
   const excludeSet = new Set(state.metadata.excludedFiles || []);
   const excludePatterns = state.metadata.excludePatterns || [];
+  const hasExcludes = excludePatterns.length > 0;
 
-  let images = state.allImages.filter(img => {
+  cachedVisibleImages = state.allImages.filter(img => {
     if (excludeSet.has(img)) return false;
-    const rel = relativePath(img);
-    for (const pat of excludePatterns) {
-      if (globMatch(rel, pat) || globMatch(img, pat)) return false;
+    if (hasExcludes) {
+      const rel = relativePath(img);
+      for (const pat of excludePatterns) {
+        if (globMatch(rel, pat) || globMatch(img, pat)) return false;
+      }
     }
     return true;
   });
+  return cachedVisibleImages;
+}
+
+function applyFilters() {
+  let images = getVisibleImages();
 
   // Tag filter
   if (state.currentFilter === 'untagged') {
@@ -213,7 +229,7 @@ function applyFilters() {
   // Search filter
   if (state.searchQuery) {
     const q = state.searchQuery.toLowerCase();
-    images = images.filter(img => img.toLowerCase().includes(q));
+    images = images.filter(img => (lowercaseIndex?.get(img) || img.toLowerCase()).includes(q));
   }
 
   state.filteredImages = images;
@@ -242,30 +258,56 @@ function getTagsForImage(img) {
 
 function getAllTags() {
   const counts = new Map();
-  const excludeSet = new Set(state.metadata.excludedFiles || []);
-  for (const img of state.allImages) {
-    if (excludeSet.has(img)) continue;
-    for (const tag of getTagsForImage(img)) {
-      counts.set(tag, (counts.get(tag) || 0) + 1);
+  const visible = getVisibleImages();
+
+  // Count manual tags
+  for (const [path, tags] of Object.entries(state.metadata.tags || {})) {
+    if (!visible.includes(path)) continue;
+    for (const t of tags) counts.set(t, (counts.get(t) || 0) + 1);
+  }
+
+  // Count auto-tag rule matches (iterate rules, not images)
+  for (const rule of state.metadata.autoTagRules || []) {
+    if (!rule.pattern || !rule.tags.length) continue;
+    const re = globCompile(rule.pattern);
+    if (!re) continue;
+    let ruleCount = 0;
+    for (const img of visible) {
+      const rel = relativePath(img);
+      if (re.test(rel) || re.test(img)) ruleCount++;
+    }
+    for (const t of rule.tags) {
+      counts.set(t, (counts.get(t) || 0) + ruleCount);
     }
   }
+
   return counts;
 }
 
-// Simple glob matching (supports *, **, ?)
-function globMatch(str, pattern) {
-  // Convert glob to regex
-  let regex = pattern
+// Simple glob matching (supports *, **, ?) with compiled regex cache
+const globCache = new Map();
+
+function globCompile(pattern) {
+  let re = globCache.get(pattern);
+  if (re) return re;
+  const regex = pattern
     .replace(/[.+^${}()|[\]\\]/g, '\\$&')
     .replace(/\*\*/g, '__GLOBSTAR__')
     .replace(/\*/g, '[^/]*')
     .replace(/__GLOBSTAR__/g, '.*')
     .replace(/\?/g, '[^/]');
   try {
-    return new RegExp('^' + regex + '$', 'i').test(str);
+    re = new RegExp('^' + regex + '$', 'i');
   } catch {
-    return false;
+    re = null;
   }
+  globCache.set(pattern, re);
+  return re;
+}
+
+function globMatch(str, pattern) {
+  const re = globCompile(pattern);
+  return re ? re.test(str) : false;
 }
 
 // ===== UI Updates =====
@@ -862,6 +904,13 @@ function basename(p) {
   return p.split('/').pop();
 }
 
+function shortLabel(p) {
+  const parts = p.split('/');
+  // Show up to 2 parent segments for context (e.g. "Paladin/Shadows/attack.png")
+  const depth = Math.min(parts.length - 1, 2);
+  return parts.slice(parts.length - 1 - depth).join('/');
+}
+
 function toFileUrl(absolutePath) {
   return 'file://' + absolutePath.split('/').map(encodeURIComponent).join('/');
 }
@@ -891,6 +940,9 @@ function openCarousel(items, startIndex) {
   carousel.active = true;
   carousel.viewStates.clear();
   document.getElementById('carousel').classList.remove('hidden');
+  const bg = getCarouselBg();
+  document.getElementById('carousel-image-wrapper').style.background = bg;
+  document.getElementById('carousel-bg-input').value = bg;
   const multi = items.length > 1;
   document.getElementById('carousel-prev').style.display = multi ? '' : 'none';
   document.getElementById('carousel-next').style.display = multi ? '' : 'none';
@@ -1072,6 +1124,28 @@ function setupCarousel() {
     copyFileBtn.textContent = ok ? 'Copied!' : 'Failed';
     setTimeout(() => { copyFileBtn.innerHTML = orig; }, 1500);
   });
+
+  // Carousel background color picker
+  const bgInput = document.getElementById('carousel-bg-input');
+  bgInput.addEventListener('input', (e) => {
+    wrapper.style.background = e.target.value;
+    // Persist per theme
+    if (state.metadata) {
+      if (!state.metadata.carouselBg) state.metadata.carouselBg = {};
+      state.metadata.carouselBg[getThemeKey()] = e.target.value;
+      scheduleSave();
+    }
+  });
+}
+
+function getThemeKey() {
+  // Generate a simple key from current theme colors to identify which theme is active
+  return currentTheme.bg + currentTheme.accent;
+}
+
+function getCarouselBg() {
+  const saved = state.metadata?.carouselBg?.[getThemeKey()];
+  return saved || currentTheme.bg;
 }
 
 // ===== Cell Rendering =====
@@ -1091,7 +1165,7 @@ function renderCell(cell, imagePath, index) {
 
   const nameEl = document.createElement('div');
   nameEl.className = 'cell-filename';
-  nameEl.textContent = basename(imagePath);
+  nameEl.textContent = shortLabel(imagePath);
   nameEl.title = relativePath(imagePath);
   cell.appendChild(nameEl);
 
@@ -1586,8 +1660,20 @@ async function init() {
   // Setup event handlers
   setupOpenModal();
 
-  document.getElementById('search-input').addEventListener('input', (e) => {
-    state.searchQuery = e.target.value;
+  const searchInput = document.getElementById('search-input');
+  const searchClear = document.getElementById('btn-search-clear');
+  searchInput.addEventListener('input', (e) => {
+    searchClear.classList.toggle('hidden', !e.target.value);
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => {
+      state.searchQuery = e.target.value;
+      updateGrid();
+    }, 150);
+  });
+  searchClear.addEventListener('click', () => {
+    searchInput.value = '';
+    state.searchQuery = '';
+    searchClear.classList.add('hidden');
     updateGrid();
   });
 
@@ -1631,6 +1717,7 @@ async function init() {
     for (const img of state.selectedImages) {
       state.metadata.excludedFiles.push(img);
     }
+    invalidateVisibleCache();
     scheduleSave();
     hideDetail();
     updateGrid();
@@ -1666,6 +1753,7 @@ async function init() {
 
   document.getElementById('btn-apply-rules').addEventListener('click', () => {
     collectRulesFromModal();
+    invalidateVisibleCache();
     scheduleSave();
     hideRulesModal();
     updateGrid();
@@ -1832,6 +1920,12 @@ async function scanDirectory(dirPath, recursive) {
 
     state.baseDirectory = dirPath;
     state.allImages = files.sort();
+    // Build lowercase index for fast search
+    lowercaseIndex = new Map();
+    for (const img of state.allImages) {
+      lowercaseIndex.set(img, img.toLowerCase());
+    }
+    invalidateVisibleCache();
     state.currentFilter = 'all';
     state.searchQuery = '';
     document.getElementById('search-input').value = '';
