@@ -7,6 +7,11 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- Browser compatibility banner -->
+  <div id="compat-banner" class="hidden">
+    This app requires Chrome or Edge (File System Access API). <a href="#" id="compat-dismiss">Dismiss</a>
+  </div>
+
   <!-- Toolbar -->
   <div id="toolbar">
     <button id="btn-open" title="Choose Directory">Open Folder</button>
@@ -19,7 +24,6 @@
     <button id="btn-rules" title="Manage auto-tag rules and exclusions">Rules</button>
     <button id="btn-settings" title="Settings">Settings</button>
   </div>
-
 
   <!-- Open Folder Modal -->
   <div id="open-modal" class="modal hidden">
@@ -70,7 +74,6 @@
           &#128269; Inspect <span id="inspect-badge" class="inspect-badge" style="display:none"></span>
         </button>
         <div id="inspect-hint" class="sidebar-hint">Select images to inspect</div>
-
       </div>
     </div>
 
@@ -120,7 +123,7 @@
         <span id="carousel-filename"></span>
         <span id="carousel-counter"></span>
         <div class="carousel-titlebar-spacer"></div>
-        <button id="carousel-copy-file" class="carousel-titlebar-btn carousel-text-btn" title="Copy file to clipboard">&#128203; Copy File</button>
+        <button id="carousel-copy-file" class="carousel-titlebar-btn carousel-text-btn" title="Copy image to clipboard">&#128203; Copy Image</button>
         <label class="carousel-bg-picker" title="Background color">
           <input type="color" id="carousel-bg-input" class="color-input" />
         </label>
@@ -177,7 +180,6 @@
           <div class="settings-nav-item active" data-section="theme">Theme</div>
         </div>
         <div class="settings-body">
-          <!-- Theme Section -->
           <div id="settings-theme" class="settings-section">
             <div class="settings-group">
               <h4 class="settings-group-label">Presets</h4>
@@ -213,8 +215,26 @@
     </div>
   </div>
 
+  <style>
+    #compat-banner {
+      background: var(--orange); color: #000; text-align: center;
+      padding: 6px 12px; font-size: 12px; font-weight: 600;
+    }
+    #compat-banner.hidden { display: none; }
+    #compat-banner a { color: #000; margin-left: 8px; }
+  </style>
   <a id="feedback-link" href="https://github.com/butlersrepos/PixolBrowser/issues/new" target="_blank" title="Report a bug or request a feature">Feedback</a>
 
+  <script src="web-shim.js"></script>
   <script src="app.js"></script>
+  <script>
+    if (!window.showDirectoryPicker) {
+      document.getElementById('compat-banner').classList.remove('hidden');
+    }
+    document.getElementById('compat-dismiss').addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('compat-banner').classList.add('hidden');
+    });
+  </script>
 </body>
 </html>

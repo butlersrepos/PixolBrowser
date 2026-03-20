@@ -1,0 +1,4 @@
+#!/bin/sh
+# Auto-sync renderer files to docs/ for GitHub Pages
+cp renderer/app.js renderer/styles.css docs/
+git add docs/app.js docs/styles.css
