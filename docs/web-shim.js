@@ -99,6 +99,28 @@ window.api = {
     };
   },
 
+  getAllDimensions: async (filePaths) => {
+    const dims = {};
+    const BATCH = 30;
+    for (let i = 0; i < filePaths.length; i += BATCH) {
+      const batch = filePaths.slice(i, i + BATCH);
+      await Promise.all(batch.map(p => {
+        const url = window._blobUrls.get(p);
+        if (!url) return Promise.resolve();
+        return new Promise(resolve => {
+          const img = new Image();
+          img.onload = () => { dims[p] = { width: img.naturalWidth, height: img.naturalHeight }; resolve(); };
+          img.onerror = resolve;
+          img.src = url;
+        });
+      }));
+      if (_scanProgressCb && (i + BATCH) % 300 === 0) _scanProgressCb(i + BATCH);
+    }
+    return dims;
+  },
+
+  onDimensionsProgress: (callback) => { /* handled via scanProgress in web */ },
+
   saveMetadata: async (metadata) => {
     try {
       localStorage.setItem(METADATA_KEY, JSON.stringify(metadata));

@@ -49,6 +49,23 @@
     </div>
   </div>
 
+  <!-- Filter Bar -->
+  <div id="filter-bar">
+    <span class="filter-label">Size:</span>
+    <button class="dim-preset active" data-min="0" data-max="999999">All</button>
+    <button class="dim-preset" data-min="0" data-max="32">Tiny ≤32</button>
+    <button class="dim-preset" data-min="33" data-max="64">Small 33-64</button>
+    <button class="dim-preset" data-min="65" data-max="128">Med 65-128</button>
+    <button class="dim-preset" data-min="129" data-max="256">Lg 129-256</button>
+    <button class="dim-preset" data-min="257" data-max="999999">XL 257+</button>
+    <div class="filter-divider"></div>
+    <span class="filter-label">Custom:</span>
+    <input type="number" id="dim-min" class="dim-input" placeholder="min" min="0" />
+    <span class="filter-dash">&ndash;</span>
+    <input type="number" id="dim-max" class="dim-input" placeholder="max" min="0" />
+    <button id="dim-clear" class="dim-clear hidden">Clear</button>
+  </div>
+
   <!-- Main Layout -->
   <div id="main">
     <!-- Sidebar: Tags -->
@@ -175,6 +192,7 @@
       <div class="settings-layout">
         <div class="settings-nav">
           <div class="settings-nav-item active" data-section="theme">Theme</div>
+          <div class="settings-nav-item" data-section="configs">Rules &amp; Tags</div>
         </div>
         <div class="settings-body">
           <!-- Theme Section -->
@@ -199,6 +217,29 @@
               <button id="theme-reset-btn" class="btn-secondary btn-sm">Reset to Default</button>
               <button id="theme-copy-btn" class="btn-secondary btn-sm">Copy as JSON</button>
             </div>
+          </div>
+
+          <!-- Rules & Tags Config Section -->
+          <div id="settings-configs" class="settings-section hidden">
+            <div class="settings-group">
+              <h4 class="settings-group-label">Active Configuration</h4>
+              <div id="config-active-name" class="config-active-name">Default</div>
+            </div>
+            <div class="settings-group">
+              <h4 class="settings-group-label">Saved Configurations</h4>
+              <div id="config-list" class="config-list"></div>
+            </div>
+            <div class="settings-group">
+              <h4 class="settings-group-label">Actions</h4>
+              <div class="config-actions-row">
+                <button id="config-save-as" class="btn-secondary btn-sm">Save As New...</button>
+                <button id="config-export" class="btn-secondary btn-sm">Export to File</button>
+                <button id="config-import" class="btn-secondary btn-sm">Import from File</button>
+                <input type="file" id="config-import-file" accept=".json,.pixol-browser.json" style="display:none" />
+              </div>
+              <div id="config-feedback" class="theme-feedback hidden"></div>
+            </div>
+            <p class="help-text">Configurations store your auto-tag rules, exclude patterns, and manual tags. Switch between them to apply different organization schemes to your images.</p>
           </div>
         </div>
       </div>

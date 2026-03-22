@@ -96,6 +96,84 @@ ipcMain.handle('count-images', async (_event, dirPath, recursive) => {
   return count;
 });
 
+// Batch read image dimensions from file headers (no dependencies, just raw bytes)
+ipcMain.handle('get-all-dimensions', async (event, filePaths) => {
+  const fsSync = require('fs');
+  const dims = {};
+  for (let i = 0; i < filePaths.length; i++) {
+    try {
+      dims[filePaths[i]] = readImageDimensions(fsSync, filePaths[i]);
+    } catch { /* skip */ }
+    if ((i + 1) % 2000 === 0) {
+      event.sender.send('dimensions-progress', i + 1, filePaths.length);
+    }
+  }
+  return dims;
+});
+
+function readImageDimensions(fsSync, filePath) {
+  const fd = fsSync.openSync(filePath, 'r');
+  try {
+    const header = Buffer.alloc(32);
+    fsSync.readSync(fd, header, 0, 32, 0);
+
+    // PNG: bytes 16-23 contain width and height as 32-bit big-endian
+    if (header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47) {
+      return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
+    }
+
+    // GIF: bytes 6-9 contain width and height as 16-bit little-endian
+    if (header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46) {
+      return { width: header.readUInt16LE(6), height: header.readUInt16LE(8) };
+    }
+
+    // BMP: bytes 18-25 contain width and height as 32-bit little-endian
+    if (header[0] === 0x42 && header[1] === 0x4D) {
+      return { width: header.readUInt32LE(18), height: Math.abs(header.readInt32LE(22)) };
+    }
+
+    // JPEG: need to scan for SOF marker
+    if (header[0] === 0xFF && header[1] === 0xD8) {
+      const buf = Buffer.alloc(65536);
+      fsSync.readSync(fd, buf, 0, buf.length, 0);
+      let offset = 2;
+      while (offset < buf.length - 10) {
+        if (buf[offset] !== 0xFF) break;
+        const marker = buf[offset + 1];
+        if (marker >= 0xC0 && marker <= 0xCF && marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC) {
+          return { width: buf.readUInt16BE(offset + 7), height: buf.readUInt16BE(offset + 5) };
+        }
+        const len = buf.readUInt16BE(offset + 2);
+        offset += 2 + len;
+      }
+    }
+
+    // WebP: RIFF header then VP8 chunk
+    if (header[0] === 0x52 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x46) {
+      const buf = Buffer.alloc(64);
+      fsSync.readSync(fd, buf, 0, 64, 0);
+      // VP8L (lossless)
+      if (buf[12] === 0x56 && buf[13] === 0x50 && buf[14] === 0x38 && buf[15] === 0x4C) {
+        const bits = buf.readUInt32LE(21);
+        return { width: (bits & 0x3FFF) + 1, height: ((bits >> 14) & 0x3FFF) + 1 };
+      }
+      // VP8 (lossy)
+      if (buf[12] === 0x56 && buf[13] === 0x50 && buf[14] === 0x38 && buf[15] === 0x20) {
+        return { width: buf.readUInt16LE(26) & 0x3FFF, height: buf.readUInt16LE(28) & 0x3FFF };
+      }
+      // VP8X (extended)
+      if (buf[12] === 0x56 && buf[13] === 0x50 && buf[14] === 0x38 && buf[15] === 0x58) {
+        const w = (buf[24] | (buf[25] << 8) | (buf[26] << 16)) + 1;
+        const h = (buf[27] | (buf[28] << 8) | (buf[29] << 16)) + 1;
+        return { width: w, height: h };
+      }
+    }
+  } finally {
+    fsSync.closeSync(fd);
+  }
+  return null;
+}
+
 // Get image info (dimensions + file size)
 ipcMain.handle('get-image-info', async (_event, filePath) => {
   try {

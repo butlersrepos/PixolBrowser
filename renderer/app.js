@@ -11,11 +11,43 @@ const state = {
   lastClickedIndex: -1,  // for shift+click range select
   allTags: new Map(),    // tag -> count
   zoomLevel: 1,
+  dimensions: {},      // path -> { width, height }
+  dimFilter: null,     // null = no filter, or { min, max } on max(w,h)
 };
 
 let grid = null;
 let saveTimeout = null;
 let searchDebounce = null;
+
+// ===== Config Accessors =====
+// All rule/tag access goes through the active config
+function activeConfig() {
+  const name = state.metadata?.activeConfig || 'Default';
+  if (!state.metadata.configs) state.metadata.configs = {};
+  if (!state.metadata.configs[name]) {
+    state.metadata.configs[name] = { autoTagRules: [], excludePatterns: [], excludedFiles: [], tags: {} };
+  }
+  return state.metadata.configs[name];
+}
+
+function migrateMetadata(m) {
+  // Migrate flat metadata to configs model
+  if (m.configs) return m;
+  const config = {
+    autoTagRules: m.autoTagRules || [],
+    excludePatterns: m.excludePatterns || [],
+    excludedFiles: m.excludedFiles || [],
+    tags: m.tags || {},
+  };
+  m.configs = { 'Default': config };
+  m.activeConfig = 'Default';
+  // Remove old top-level keys
+  delete m.autoTagRules;
+  delete m.excludePatterns;
+  delete m.excludedFiles;
+  delete m.tags;
+  return m;
+}
 let cachedVisibleImages = null; // images after excludes, before tag/search filters
 let lowercaseIndex = null; // Map<imagePath, lowercasedPath> for fast search
 
@@ -199,8 +231,8 @@ function invalidateVisibleCache() {
 
 function getVisibleImages() {
   if (cachedVisibleImages) return cachedVisibleImages;
-  const excludeSet = new Set(state.metadata.excludedFiles || []);
-  const excludePatterns = state.metadata.excludePatterns || [];
+  const excludeSet = new Set(activeConfig().excludedFiles || []);
+  const excludePatterns = activeConfig().excludePatterns || [];
   const hasExcludes = excludePatterns.length > 0;
 
   cachedVisibleImages = state.allImages.filter(img => {
@@ -232,6 +264,17 @@ function applyFilters() {
     images = images.filter(img => (lowercaseIndex?.get(img) || img.toLowerCase()).includes(q));
   }
 
+  // Dimension filter
+  if (state.dimFilter) {
+    const { min, max } = state.dimFilter;
+    images = images.filter(img => {
+      const d = state.dimensions[img];
+      if (!d) return false;
+      const maxDim = Math.max(d.width, d.height);
+      return maxDim >= min && maxDim <= max;
+    });
+  }
+
   state.filteredImages = images;
 }
 
@@ -243,10 +286,10 @@ function relativePath(img) {
 }
 
 function getTagsForImage(img) {
-  const manual = state.metadata.tags[img] || [];
+  const manual = activeConfig().tags[img] || [];
   const auto = [];
   const rel = relativePath(img);
-  for (const rule of state.metadata.autoTagRules || []) {
+  for (const rule of activeConfig().autoTagRules || []) {
     if (globMatch(rel, rule.pattern) || globMatch(img, rule.pattern)) {
       for (const t of rule.tags) {
         if (!manual.includes(t) && !auto.includes(t)) auto.push(t);
@@ -261,13 +304,13 @@ function getAllTags() {
   const visible = getVisibleImages();
 
   // Count manual tags
-  for (const [path, tags] of Object.entries(state.metadata.tags || {})) {
+  for (const [path, tags] of Object.entries(activeConfig().tags || {})) {
     if (!visible.includes(path)) continue;
     for (const t of tags) counts.set(t, (counts.get(t) || 0) + 1);
   }
 
   // Count auto-tag rule matches (iterate rules, not images)
-  for (const rule of state.metadata.autoTagRules || []) {
+  for (const rule of activeConfig().autoTagRules || []) {
     if (!rule.pattern || !rule.tags.length) continue;
     const re = globCompile(rule.pattern);
     if (!re) continue;
@@ -324,7 +367,7 @@ function updateSidebar() {
   state.allTags = getAllTags();
 
   // Update counts
-  const excludeSet = new Set(state.metadata.excludedFiles || []);
+  const excludeSet = new Set(activeConfig().excludedFiles || []);
   const visibleImages = state.allImages.filter(img => !excludeSet.has(img));
   document.getElementById('count-all').textContent = visibleImages.length;
 
@@ -374,19 +417,19 @@ function showTagContextMenu(e, tag, count) {
   menu.querySelector('.context-menu-item').addEventListener('click', () => {
     menu.remove();
     if (confirm(`Remove tag "${tag}" from all ${count} image${count === 1 ? '' : 's'}?\n\nThis cannot be undone.`)) {
-      for (const path of Object.keys(state.metadata.tags)) {
-        const tags = state.metadata.tags[path];
+      for (const path of Object.keys(activeConfig().tags)) {
+        const tags = activeConfig().tags[path];
         const idx = tags.indexOf(tag);
         if (idx >= 0) {
           tags.splice(idx, 1);
-          if (tags.length === 0) delete state.metadata.tags[path];
+          if (tags.length === 0) delete activeConfig().tags[path];
         }
       }
       // Also remove from auto-tag rules
-      for (const rule of state.metadata.autoTagRules) {
+      for (const rule of activeConfig().autoTagRules) {
         rule.tags = rule.tags.filter(t => t !== tag);
       }
-      state.metadata.autoTagRules = state.metadata.autoTagRules.filter(r => r.tags.length > 0);
+      activeConfig().autoTagRules = activeConfig().autoTagRules.filter(r => r.tags.length > 0);
       scheduleSave();
       if (state.currentFilter === tag) state.currentFilter = 'all';
       updateGrid();
@@ -557,7 +600,7 @@ function updateDetailTags() {
     // Single image: show all tags, allow removal of manual ones
     const imagePath = selected[0];
     const tags = getTagsForImage(imagePath);
-    const manualTags = state.metadata.tags[imagePath] || [];
+    const manualTags = activeConfig().tags[imagePath] || [];
 
     for (const tag of tags) {
       const chip = document.createElement('span');
@@ -606,9 +649,9 @@ function addTagToImages(imagePaths, tag) {
   tag = tag.trim().toLowerCase();
   if (!tag) return;
   for (const p of imagePaths) {
-    if (!state.metadata.tags[p]) state.metadata.tags[p] = [];
-    if (!state.metadata.tags[p].includes(tag)) {
-      state.metadata.tags[p].push(tag);
+    if (!activeConfig().tags[p]) activeConfig().tags[p] = [];
+    if (!activeConfig().tags[p].includes(tag)) {
+      activeConfig().tags[p].push(tag);
     }
   }
   scheduleSave();
@@ -619,9 +662,9 @@ function addTagToImages(imagePaths, tag) {
 
 function removeTagFromImages(imagePaths, tag) {
   for (const p of imagePaths) {
-    if (!state.metadata.tags[p]) continue;
-    state.metadata.tags[p] = state.metadata.tags[p].filter(t => t !== tag);
-    if (state.metadata.tags[p].length === 0) delete state.metadata.tags[p];
+    if (!activeConfig().tags[p]) continue;
+    activeConfig().tags[p] = activeConfig().tags[p].filter(t => t !== tag);
+    if (activeConfig().tags[p].length === 0) delete activeConfig().tags[p];
   }
   scheduleSave();
   updateDetailTags();
@@ -801,8 +844,8 @@ function renderRulesModal() {
   // Auto-tag rules
   const rulesList = document.getElementById('rules-list');
   rulesList.innerHTML = '';
-  for (let i = 0; i < state.metadata.autoTagRules.length; i++) {
-    const rule = state.metadata.autoTagRules[i];
+  for (let i = 0; i < activeConfig().autoTagRules.length; i++) {
+    const rule = activeConfig().autoTagRules[i];
     const block = document.createElement('div');
     block.className = 'rule-block';
     block.innerHTML = `
@@ -822,7 +865,7 @@ function renderRulesModal() {
     btn.addEventListener('click', () => {
       collectRulesFromModal();
       const idx = parseInt(btn.dataset.idx);
-      state.metadata.autoTagRules.splice(idx, 1);
+      activeConfig().autoTagRules.splice(idx, 1);
       renderRulesModal();
     });
   });
@@ -830,8 +873,8 @@ function renderRulesModal() {
   // Exclude patterns
   const excludeList = document.getElementById('exclude-list');
   excludeList.innerHTML = '';
-  for (let i = 0; i < (state.metadata.excludePatterns || []).length; i++) {
-    const pat = state.metadata.excludePatterns[i];
+  for (let i = 0; i < (activeConfig().excludePatterns || []).length; i++) {
+    const pat = activeConfig().excludePatterns[i];
     const block = document.createElement('div');
     block.className = 'rule-block';
     block.innerHTML = `
@@ -849,7 +892,7 @@ function renderRulesModal() {
     btn.addEventListener('click', () => {
       collectRulesFromModal();
       const idx = parseInt(btn.dataset.eidx);
-      state.metadata.excludePatterns.splice(idx, 1);
+      activeConfig().excludePatterns.splice(idx, 1);
       renderRulesModal();
     });
   });
@@ -858,25 +901,25 @@ function renderRulesModal() {
 function collectRulesFromModal() {
   // Collect auto-tag rules
   const ruleRows = document.querySelectorAll('#rules-list .rule-row');
-  state.metadata.autoTagRules = [];
+  activeConfig().autoTagRules = [];
   ruleRows.forEach(row => {
     const pattern = row.querySelector('.rule-pattern').value.trim();
     const tagsStr = row.querySelector('.rule-tags').value.trim();
     if (pattern && tagsStr) {
       const tags = tagsStr.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
       if (tags.length) {
-        state.metadata.autoTagRules.push({ pattern, tags });
+        activeConfig().autoTagRules.push({ pattern, tags });
       }
     }
   });
 
   // Collect exclude patterns
   const excludeRows = document.querySelectorAll('#exclude-list .rule-row');
-  state.metadata.excludePatterns = [];
+  activeConfig().excludePatterns = [];
   excludeRows.forEach(row => {
     const pattern = row.querySelector('.exclude-pattern').value.trim();
     if (pattern) {
-      state.metadata.excludePatterns.push(pattern);
+      activeConfig().excludePatterns.push(pattern);
     }
   });
 }
@@ -909,6 +952,27 @@ function shortLabel(p) {
   // Show up to 2 parent segments for context (e.g. "Paladin/Shadows/attack.png")
   const depth = Math.min(parts.length - 1, 2);
   return parts.slice(parts.length - 1 - depth).join('/');
+}
+
+async function readAllDimensions(files, onProgress) {
+  // Use IPC for Electron (reads file headers), Image objects for web
+  if (window.api.getAllDimensions) {
+    return window.api.getAllDimensions(files, onProgress);
+  }
+  // Web fallback: batch Image loading
+  const dims = {};
+  const BATCH = 50;
+  for (let i = 0; i < files.length; i += BATCH) {
+    const batch = files.slice(i, i + BATCH);
+    await Promise.all(batch.map(p => new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => { dims[p] = { width: img.naturalWidth, height: img.naturalHeight }; resolve(); };
+      img.onerror = resolve;
+      img.src = toFileUrl(p);
+    })));
+    if (onProgress && (i + BATCH) % 500 < BATCH) onProgress(Math.min(i + BATCH, files.length));
+  }
+  return dims;
 }
 
 function toFileUrl(absolutePath) {
@@ -1452,6 +1516,10 @@ function saveThemeToMetadata() {
 
 function showSettingsModal() {
   document.getElementById('settings-modal').classList.remove('hidden');
+  // Reset to theme tab
+  document.querySelectorAll('.settings-nav-item').forEach(i => i.classList.toggle('active', i.dataset.section === 'theme'));
+  document.getElementById('settings-theme').classList.remove('hidden');
+  document.getElementById('settings-configs').classList.add('hidden');
   renderSettingsTheme();
 }
 
@@ -1617,12 +1685,127 @@ function setupSettings() {
   });
 
   // Nav items (for future categories)
+  // Nav switching
   document.querySelectorAll('.settings-nav-item').forEach(item => {
     item.addEventListener('click', () => {
       document.querySelectorAll('.settings-nav-item').forEach(i => i.classList.remove('active'));
       item.classList.add('active');
+      document.querySelectorAll('.settings-section').forEach(s => s.classList.add('hidden'));
+      const section = item.dataset.section;
+      document.getElementById('settings-' + section).classList.remove('hidden');
+      if (section === 'configs') renderConfigsUI();
     });
   });
+
+  // Config management
+  document.getElementById('config-save-as').addEventListener('click', () => {
+    const name = prompt('Name for new configuration:');
+    if (!name?.trim()) return;
+    const trimmed = name.trim();
+    if (!state.metadata.configs) state.metadata.configs = {};
+    // Clone the active config
+    state.metadata.configs[trimmed] = JSON.parse(JSON.stringify(activeConfig()));
+    state.metadata.activeConfig = trimmed;
+    scheduleSave();
+    renderConfigsUI();
+    invalidateVisibleCache();
+    updateGrid();
+  });
+
+  document.getElementById('config-export').addEventListener('click', () => {
+    const name = state.metadata.activeConfig || 'Default';
+    const data = JSON.stringify(activeConfig(), null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${name}.pixol-browser.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  const configFileInput = document.getElementById('config-import-file');
+  document.getElementById('config-import').addEventListener('click', () => configFileInput.click());
+  configFileInput.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const feedback = document.getElementById('config-feedback');
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      // Derive name from filename: "Foo.pixol-browser.json" -> "Foo"
+      let name = file.name.replace(/\.pixol-browser\.json$/, '').replace(/\.json$/, '');
+      if (!name) name = 'Imported';
+      if (!state.metadata.configs) state.metadata.configs = {};
+      state.metadata.configs[name] = {
+        autoTagRules: parsed.autoTagRules || [],
+        excludePatterns: parsed.excludePatterns || [],
+        excludedFiles: parsed.excludedFiles || [],
+        tags: parsed.tags || {},
+      };
+      state.metadata.activeConfig = name;
+      scheduleSave();
+      invalidateVisibleCache();
+      updateGrid();
+      renderConfigsUI();
+      feedback.textContent = `Imported "${name}"`;
+      feedback.classList.remove('hidden');
+      setTimeout(() => feedback.classList.add('hidden'), 2000);
+    } catch {
+      feedback.textContent = 'Invalid JSON file';
+      feedback.classList.remove('hidden');
+      setTimeout(() => feedback.classList.add('hidden'), 2000);
+    }
+    configFileInput.value = '';
+  });
+}
+
+function renderConfigsUI() {
+  const activeName = state.metadata.activeConfig || 'Default';
+  document.getElementById('config-active-name').textContent = activeName;
+
+  const list = document.getElementById('config-list');
+  list.innerHTML = '';
+  const configs = state.metadata.configs || {};
+
+  for (const name of Object.keys(configs)) {
+    const isActive = name === activeName;
+    const config = configs[name];
+    const ruleCount = (config.autoTagRules || []).length;
+    const tagCount = Object.keys(config.tags || {}).length;
+
+    const item = document.createElement('div');
+    item.className = 'config-item' + (isActive ? ' active' : '');
+    item.innerHTML = `
+      <button class="config-item-name">${escHtml(name)}</button>
+      <span class="config-item-badge">${ruleCount} rules, ${tagCount} tagged</span>
+      ${name !== 'Default' ? '<button class="config-item-delete" title="Delete">&times;</button>' : ''}
+    `;
+
+    item.querySelector('.config-item-name').addEventListener('click', () => {
+      if (isActive) return;
+      state.metadata.activeConfig = name;
+      scheduleSave();
+      invalidateVisibleCache();
+      updateGrid();
+      renderConfigsUI();
+    });
+
+    const delBtn = item.querySelector('.config-item-delete');
+    if (delBtn) {
+      delBtn.addEventListener('click', () => {
+        if (!confirm(`Delete configuration "${name}"?`)) return;
+        delete state.metadata.configs[name];
+        if (activeName === name) state.metadata.activeConfig = 'Default';
+        scheduleSave();
+        invalidateVisibleCache();
+        updateGrid();
+        renderConfigsUI();
+      });
+    }
+
+    list.appendChild(item);
+  }
 }
 
 // ===== Drag Select =====
@@ -1705,10 +1888,69 @@ function setupDragSelect() {
   }
 }
 
+// ===== Dimension Filter =====
+function setupDimFilter() {
+  const presets = document.querySelectorAll('.dim-preset');
+  const minInput = document.getElementById('dim-min');
+  const maxInput = document.getElementById('dim-max');
+  const clearBtn = document.getElementById('dim-clear');
+
+  presets.forEach(btn => {
+    btn.addEventListener('click', () => {
+      presets.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const min = parseInt(btn.dataset.min);
+      const max = parseInt(btn.dataset.max);
+      if (min === 0 && max === 999999) {
+        state.dimFilter = null;
+        clearBtn.classList.add('hidden');
+      } else {
+        state.dimFilter = { min, max };
+        clearBtn.classList.remove('hidden');
+      }
+      minInput.value = '';
+      maxInput.value = '';
+      updateGrid();
+    });
+  });
+
+  // Custom range: apply on Enter
+  function applyCustomDim() {
+    const min = parseInt(minInput.value) || 0;
+    const max = parseInt(maxInput.value) || 999999;
+    state.dimFilter = { min, max };
+    presets.forEach(b => b.classList.remove('active'));
+    clearBtn.classList.remove('hidden');
+    updateGrid();
+  }
+
+  minInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyCustomDim(); });
+  maxInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyCustomDim(); });
+
+  clearBtn.addEventListener('click', () => {
+    state.dimFilter = null;
+    minInput.value = '';
+    maxInput.value = '';
+    presets.forEach(b => b.classList.remove('active'));
+    document.querySelector('.dim-preset[data-min="0"][data-max="999999"]').classList.add('active');
+    clearBtn.classList.add('hidden');
+    updateGrid();
+  });
+}
+
+function updateDimFilterUI() {
+  // Reset filter UI when new directory loaded
+  document.querySelectorAll('.dim-preset').forEach(b => b.classList.remove('active'));
+  document.querySelector('.dim-preset[data-min="0"][data-max="999999"]').classList.add('active');
+  document.getElementById('dim-min').value = '';
+  document.getElementById('dim-max').value = '';
+  document.getElementById('dim-clear').classList.add('hidden');
+}
+
 // ===== Initialization =====
 async function init() {
   // Load metadata
-  state.metadata = await window.api.loadMetadata();
+  state.metadata = migrateMetadata(await window.api.loadMetadata());
 
   // Setup grid
   grid = new VirtualGrid(document.getElementById('grid-container'), {
@@ -1800,9 +2042,9 @@ async function init() {
       ? 'Exclude this image from the gallery?\n\nYou can undo this by editing your rules.'
       : `Exclude ${count} images from the gallery?\n\nYou can undo this by editing your rules.`;
     if (!confirm(msg)) return;
-    if (!state.metadata.excludedFiles) state.metadata.excludedFiles = [];
+    if (!activeConfig().excludedFiles) activeConfig().excludedFiles = [];
     for (const img of state.selectedImages) {
-      state.metadata.excludedFiles.push(img);
+      activeConfig().excludedFiles.push(img);
     }
     invalidateVisibleCache();
     scheduleSave();
@@ -1815,6 +2057,7 @@ async function init() {
   setupCarousel();
   setupSettings();
   setupDragSelect();
+  setupDimFilter();
 
   // Apply saved theme
   if (state.metadata.theme) {
@@ -1828,14 +2071,14 @@ async function init() {
 
   document.getElementById('btn-add-rule').addEventListener('click', () => {
     collectRulesFromModal();
-    state.metadata.autoTagRules.push({ pattern: '', tags: [] });
+    activeConfig().autoTagRules.push({ pattern: '', tags: [] });
     renderRulesModal();
   });
 
   document.getElementById('btn-add-exclude').addEventListener('click', () => {
     collectRulesFromModal();
-    if (!state.metadata.excludePatterns) state.metadata.excludePatterns = [];
-    state.metadata.excludePatterns.push('');
+    if (!activeConfig().excludePatterns) activeConfig().excludePatterns = [];
+    activeConfig().excludePatterns.push('');
     renderRulesModal();
   });
 
@@ -1999,8 +2242,10 @@ function setupOpenModal() {
 
 async function scanDirectory(dirPath, recursive) {
   // Show scan overlay
-  document.getElementById('scan-overlay').classList.remove('hidden');
-  document.getElementById('scan-text').textContent = 'Scanning...';
+  const overlay = document.getElementById('scan-overlay');
+  const scanText = document.getElementById('scan-text');
+  overlay.classList.remove('hidden');
+  scanText.textContent = 'Scanning...';
   removeEmptyState();
 
   try {
@@ -2016,7 +2261,14 @@ async function scanDirectory(dirPath, recursive) {
     invalidateVisibleCache();
     state.currentFilter = 'all';
     state.searchQuery = '';
+    state.dimFilter = null;
     document.getElementById('search-input').value = '';
+
+    // Read dimensions in renderer (works in both Electron and web)
+    scanText.textContent = `Reading dimensions for ${files.length.toLocaleString()} images...`;
+    state.dimensions = await readAllDimensions(files, (done) => {
+      scanText.textContent = `Reading dimensions... ${done.toLocaleString()} / ${files.length.toLocaleString()}`;
+    });
 
     // Update metadata
     state.metadata.lastDirectory = dirPath;
@@ -2026,9 +2278,10 @@ async function scanDirectory(dirPath, recursive) {
     // Activate "All" filter
     activateFilter();
     updateGrid();
+    updateDimFilterUI();
 
   } finally {
-    document.getElementById('scan-overlay').classList.add('hidden');
+    overlay.classList.add('hidden');
   }
 }
 

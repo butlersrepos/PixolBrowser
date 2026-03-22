@@ -155,10 +155,85 @@ html, body {
 }
 
 
+/* === Filter Bar === */
+#filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.filter-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  user-select: none;
+}
+
+.dim-preset {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dim-preset:hover { color: var(--text); border-color: var(--accent); }
+.dim-preset.active {
+  background: color-mix(in srgb, var(--accent) 20%, var(--card));
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.filter-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+.filter-dash { color: var(--muted); font-size: 11px; }
+
+.dim-input {
+  width: 56px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+.dim-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.dim-input:focus { border-color: var(--accent); }
+
+.dim-clear {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--red);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.dim-clear:hover { background: var(--border); }
+.dim-clear.hidden { display: none; }
+
 /* === Main Layout === */
 #main {
   display: flex;
-  height: calc(100vh - 44px);
+  height: calc(100vh - 44px - 33px);
 }
 
 /* === Sidebar === */
@@ -1022,6 +1097,7 @@ html, body {
 }
 
 .settings-section { display: flex; flex-direction: column; gap: 16px; }
+.settings-section.hidden { display: none; }
 
 .settings-group {}
 .settings-group-label {
@@ -1189,6 +1265,75 @@ html, body {
 
 .color-input::-webkit-color-swatch-wrapper { padding: 0; }
 .color-input::-webkit-color-swatch { border: none; border-radius: 2px; }
+
+/* === Config Management === */
+.config-active-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 4px 0;
+}
+
+.config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.config-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+
+.config-item:hover { background: var(--card); }
+.config-item.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--card)); }
+
+.config-item-name {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+}
+
+.config-item-name:hover { color: var(--accent); }
+
+.config-item-badge {
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--bg);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.config-item-delete {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.config-item-delete:hover { background: var(--red); color: #fff; }
+
+.config-actions-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
 
 /* === Feedback Link === */
 #feedback-link {
