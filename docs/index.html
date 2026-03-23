@@ -7,11 +7,6 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Browser compatibility banner -->
-  <div id="compat-banner" class="hidden">
-    This app requires Chrome or Edge (File System Access API). <a href="#" id="compat-dismiss">Dismiss</a>
-  </div>
-
   <!-- Toolbar -->
   <div id="toolbar">
     <button id="btn-open" title="Choose Directory">Open Folder</button>
@@ -24,6 +19,7 @@
     <button id="btn-rules" title="Manage auto-tag rules and exclusions">Rules</button>
     <button id="btn-settings" title="Settings">Settings</button>
   </div>
+
 
   <!-- Open Folder Modal -->
   <div id="open-modal" class="modal hidden">
@@ -53,6 +49,32 @@
     </div>
   </div>
 
+  <!-- Filter Bar -->
+  <div id="filter-bar">
+    <span class="filter-label">Size:</span>
+    <button class="dim-preset active" data-min="0" data-max="999999">All</button>
+    <button class="dim-preset" data-min="0" data-max="32">Tiny ≤32</button>
+    <button class="dim-preset" data-min="33" data-max="64">Small 33-64</button>
+    <button class="dim-preset" data-min="65" data-max="128">Med 65-128</button>
+    <button class="dim-preset" data-min="129" data-max="256">Lg 129-256</button>
+    <button class="dim-preset" data-min="257" data-max="999999">XL 257+</button>
+    <div class="filter-divider"></div>
+    <span class="filter-label">Custom:</span>
+    <input type="number" id="dim-min" class="dim-input" placeholder="min" min="0" />
+    <span class="filter-dash">&ndash;</span>
+    <input type="number" id="dim-max" class="dim-input" placeholder="max" min="0" />
+    <button id="dim-clear" class="dim-clear hidden">Clear</button>
+    <div class="filter-divider"></div>
+    <span class="filter-label">Sort:</span>
+    <select id="sort-by" class="sort-select">
+      <option value="name">Name</option>
+      <option value="size">File Size</option>
+      <option value="dimensions">Dimensions</option>
+      <option value="modified">Date Modified</option>
+    </select>
+    <button id="sort-dir" class="sort-dir-btn" title="Toggle sort direction">&#9650;</button>
+  </div>
+
   <!-- Main Layout -->
   <div id="main">
     <!-- Sidebar: Tags -->
@@ -74,6 +96,7 @@
           &#128269; Inspect <span id="inspect-badge" class="inspect-badge" style="display:none"></span>
         </button>
         <div id="inspect-hint" class="sidebar-hint">Select images to inspect</div>
+
       </div>
     </div>
 
@@ -99,6 +122,7 @@
           <div id="detail-filename-row">
             <div id="detail-filename"></div>
             <button id="btn-copy-name" class="btn-icon" title="Copy filename">&#9112;</button>
+            <button id="btn-copy-path" class="btn-icon" title="Copy file path">&#128194;</button>
           </div>
           <div id="detail-path"></div>
           <div id="detail-meta"></div>
@@ -123,7 +147,8 @@
         <span id="carousel-filename"></span>
         <span id="carousel-counter"></span>
         <div class="carousel-titlebar-spacer"></div>
-        <button id="carousel-copy-file" class="carousel-titlebar-btn carousel-text-btn" title="Copy image to clipboard">&#128203; Copy Image</button>
+        <button id="carousel-copy-file" class="carousel-titlebar-btn carousel-text-btn" title="Copy file to clipboard">&#128203; Copy File</button>
+        <button id="carousel-copy-path" class="carousel-titlebar-btn carousel-text-btn" title="Copy file path">&#128194; Copy Path</button>
         <label class="carousel-bg-picker" title="Background color">
           <input type="color" id="carousel-bg-input" class="color-input" />
         </label>
@@ -178,8 +203,10 @@
       <div class="settings-layout">
         <div class="settings-nav">
           <div class="settings-nav-item active" data-section="theme">Theme</div>
+          <div class="settings-nav-item" data-section="configs">Rules &amp; Tags</div>
         </div>
         <div class="settings-body">
+          <!-- Theme Section -->
           <div id="settings-theme" class="settings-section">
             <div class="settings-group">
               <h4 class="settings-group-label">Presets</h4>
@@ -202,6 +229,29 @@
               <button id="theme-copy-btn" class="btn-secondary btn-sm">Copy as JSON</button>
             </div>
           </div>
+
+          <!-- Rules & Tags Config Section -->
+          <div id="settings-configs" class="settings-section hidden">
+            <div class="settings-group">
+              <h4 class="settings-group-label">Active Configuration</h4>
+              <div id="config-active-name" class="config-active-name">Default</div>
+            </div>
+            <div class="settings-group">
+              <h4 class="settings-group-label">Saved Configurations</h4>
+              <div id="config-list" class="config-list"></div>
+            </div>
+            <div class="settings-group">
+              <h4 class="settings-group-label">Actions</h4>
+              <div class="config-actions-row">
+                <button id="config-save-as" class="btn-secondary btn-sm">Save As New...</button>
+                <button id="config-export" class="btn-secondary btn-sm">Export to File</button>
+                <button id="config-import" class="btn-secondary btn-sm">Import from File</button>
+                <input type="file" id="config-import-file" accept=".json,.pixol-browser.json" style="display:none" />
+              </div>
+              <div id="config-feedback" class="theme-feedback hidden"></div>
+            </div>
+            <p class="help-text">Configurations store your auto-tag rules, exclude patterns, and manual tags. Switch between them to apply different organization schemes to your images.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -215,26 +265,8 @@
     </div>
   </div>
 
-  <style>
-    #compat-banner {
-      background: var(--orange); color: #000; text-align: center;
-      padding: 6px 12px; font-size: 12px; font-weight: 600;
-    }
-    #compat-banner.hidden { display: none; }
-    #compat-banner a { color: #000; margin-left: 8px; }
-  </style>
   <a id="feedback-link" href="https://github.com/butlersrepos/PixolBrowser/issues/new" target="_blank" title="Report a bug or request a feature">Feedback</a>
 
-  <script src="web-shim.js"></script>
   <script src="app.js"></script>
-  <script>
-    if (!window.showDirectoryPicker) {
-      document.getElementById('compat-banner').classList.remove('hidden');
-    }
-    document.getElementById('compat-dismiss').addEventListener('click', (e) => {
-      e.preventDefault();
-      document.getElementById('compat-banner').classList.add('hidden');
-    });
-  </script>
 </body>
 </html>

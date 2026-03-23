@@ -589,12 +589,14 @@ function updateDetailPanel() {
   const metaEl = document.getElementById('detail-meta');
   const excludeBtn = document.getElementById('btn-exclude');
   const copyBtn = document.getElementById('btn-copy-name');
+  const copyPathBtn = document.getElementById('btn-copy-path');
 
   if (count === 1) {
     // Single selection: show full detail with preview
     const imagePath = [...state.selectedImages][0];
     imageWrapper.style.display = '';
     copyBtn.style.display = '';
+    copyPathBtn.style.display = '';
     img.src = toFileUrl(imagePath);
 
     filenameEl.textContent = basename(imagePath);
@@ -623,6 +625,7 @@ function updateDetailPanel() {
     // Multi selection: hide preview, show count
     imageWrapper.style.display = 'none';
     copyBtn.style.display = 'none';
+    copyPathBtn.style.display = 'none';
     filenameEl.textContent = `${count} images selected`;
     pathEl.textContent = 'Tags applied will affect all selected images';
     metaEl.textContent = '';
@@ -1244,6 +1247,16 @@ function setupCarousel() {
     const orig = copyFileBtn.innerHTML;
     copyFileBtn.textContent = ok ? 'Copied!' : 'Failed';
     setTimeout(() => { copyFileBtn.innerHTML = orig; }, 1500);
+  });
+
+  // Copy path to clipboard
+  const copyPathBtn = document.getElementById('carousel-copy-path');
+  copyPathBtn.addEventListener('click', () => {
+    const filePath = carousel.items[carousel.currentIndex];
+    navigator.clipboard.writeText(filePath);
+    const orig = copyPathBtn.innerHTML;
+    copyPathBtn.textContent = 'Copied!';
+    setTimeout(() => { copyPathBtn.innerHTML = orig; }, 1500);
   });
 
   // Carousel background color picker
@@ -2098,6 +2111,17 @@ async function init() {
       const btn = document.getElementById('btn-copy-name');
       btn.textContent = '\u2713';
       setTimeout(() => { btn.textContent = '\u2388'; }, 1200);
+    }
+  });
+
+  document.getElementById('btn-copy-path').addEventListener('click', () => {
+    if (state.selectedImages.size === 1) {
+      const path = [...state.selectedImages][0];
+      navigator.clipboard.writeText(path);
+      const btn = document.getElementById('btn-copy-path');
+      const orig = btn.innerHTML;
+      btn.textContent = '\u2713';
+      setTimeout(() => { btn.innerHTML = orig; }, 1200);
     }
   });
 
