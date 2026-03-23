@@ -89,6 +89,28 @@ async function walkDirectory(dir, recursive, onFile) {
   }
 }
 
+// Check for .pixol-browser.json sidecar files in a directory
+ipcMain.handle('find-sidecars', async (_event, dirPath) => {
+  try {
+    const entries = await fs.readdir(dirPath);
+    return entries
+      .filter(f => f.endsWith('.pixol-browser.json'))
+      .map(f => ({ filename: f, name: f.replace('.pixol-browser.json', ''), path: path.join(dirPath, f) }));
+  } catch {
+    return [];
+  }
+});
+
+// Read a sidecar file
+ipcMain.handle('read-sidecar', async (_event, filePath) => {
+  try {
+    const data = await fs.readFile(filePath, 'utf-8');
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
+});
+
 // Quick count of image files in a directory
 ipcMain.handle('count-images', async (_event, dirPath, recursive) => {
   let count = 0;

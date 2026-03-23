@@ -34,6 +34,27 @@ window.api = {
     }
   },
 
+  findSidecars: async (dirName) => {
+    if (!_dirHandle) return [];
+    const results = [];
+    for await (const [name, handle] of _dirHandle) {
+      if (handle.kind === 'file' && name.endsWith('.pixol-browser.json')) {
+        results.push({ filename: name, name: name.replace('.pixol-browser.json', ''), handle });
+      }
+    }
+    return results;
+  },
+
+  readSidecar: async (pathOrHandle) => {
+    try {
+      // In web mode, pathOrHandle is the handle stored during findSidecars
+      const file = await pathOrHandle.getFile();
+      return JSON.parse(await file.text());
+    } catch {
+      return null;
+    }
+  },
+
   scanDirectory: async (dirName, recursive) => {
     if (!_dirHandle) return [];
     const entries = [];

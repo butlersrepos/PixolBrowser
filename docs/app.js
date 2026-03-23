@@ -2283,6 +2283,38 @@ async function scanDirectory(dirPath, recursive) {
   } finally {
     overlay.classList.add('hidden');
   }
+
+  // Check for sidecar configs in the opened directory
+  checkForSidecars(dirPath);
+}
+
+async function checkForSidecars(dirPath) {
+  if (!window.api.findSidecars) return;
+  const sidecars = await window.api.findSidecars(dirPath);
+  if (!sidecars || sidecars.length === 0) return;
+
+  for (const sidecar of sidecars) {
+    // Skip if we already have a config with this name
+    if (state.metadata.configs?.[sidecar.name]) continue;
+
+    const use = confirm(`Found configuration "${sidecar.name}" in this folder.\n\nWould you like to load it? It contains rules and tags that may help organize these images.`);
+    if (!use) continue;
+
+    const data = await window.api.readSidecar(sidecar.path || sidecar.handle);
+    if (!data) continue;
+
+    if (!state.metadata.configs) state.metadata.configs = {};
+    state.metadata.configs[sidecar.name] = {
+      autoTagRules: data.autoTagRules || [],
+      excludePatterns: data.excludePatterns || [],
+      excludedFiles: data.excludedFiles || [],
+      tags: data.tags || {},
+    };
+    state.metadata.activeConfig = sidecar.name;
+    scheduleSave();
+    invalidateVisibleCache();
+    updateGrid();
+  }
 }
 
 // Start the app
