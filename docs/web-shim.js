@@ -130,7 +130,7 @@ window.api = {
         if (!url) return Promise.resolve();
         return new Promise(resolve => {
           const img = new Image();
-          img.onload = () => { dims[p] = { width: img.naturalWidth, height: img.naturalHeight }; resolve(); };
+          img.onload = () => { dims[p] = { width: img.naturalWidth, height: img.naturalHeight, fileSize: 0, modified: 0 }; resolve(); };
           img.onerror = resolve;
           img.src = url;
         });

@@ -64,6 +64,15 @@
     <span class="filter-dash">&ndash;</span>
     <input type="number" id="dim-max" class="dim-input" placeholder="max" min="0" />
     <button id="dim-clear" class="dim-clear hidden">Clear</button>
+    <div class="filter-divider"></div>
+    <span class="filter-label">Sort:</span>
+    <select id="sort-by" class="sort-select">
+      <option value="name">Name</option>
+      <option value="size">File Size</option>
+      <option value="dimensions">Dimensions</option>
+      <option value="modified">Date Modified</option>
+    </select>
+    <button id="sort-dir" class="sort-dir-btn" title="Toggle sort direction">&#9650;</button>
   </div>
 
   <!-- Main Layout -->

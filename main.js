@@ -124,7 +124,13 @@ ipcMain.handle('get-all-dimensions', async (event, filePaths) => {
   const dims = {};
   for (let i = 0; i < filePaths.length; i++) {
     try {
-      dims[filePaths[i]] = readImageDimensions(fsSync, filePaths[i]);
+      const d = readImageDimensions(fsSync, filePaths[i]);
+      if (d) {
+        const stat = fsSync.statSync(filePaths[i]);
+        d.fileSize = stat.size;
+        d.modified = stat.mtimeMs;
+      }
+      dims[filePaths[i]] = d;
     } catch { /* skip */ }
     if ((i + 1) % 2000 === 0) {
       event.sender.send('dimensions-progress', i + 1, filePaths.length);

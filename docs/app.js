@@ -11,8 +11,10 @@ const state = {
   lastClickedIndex: -1,  // for shift+click range select
   allTags: new Map(),    // tag -> count
   zoomLevel: 1,
-  dimensions: {},      // path -> { width, height }
+  dimensions: {},      // path -> { width, height, fileSize, modified }
   dimFilter: null,     // null = no filter, or { min, max } on max(w,h)
+  sortBy: 'name',      // 'name', 'size', 'dimensions', 'modified'
+  sortDir: 'asc',      // 'asc' or 'desc'
 };
 
 let grid = null;
@@ -272,6 +274,35 @@ function applyFilters() {
       if (!d) return false;
       const maxDim = Math.max(d.width, d.height);
       return maxDim >= min && maxDim <= max;
+    });
+  }
+
+  // Sort
+  if (state.sortBy !== 'name' || state.sortDir !== 'asc') {
+    const dir = state.sortDir === 'asc' ? 1 : -1;
+    const dims = state.dimensions;
+    images.sort((a, b) => {
+      switch (state.sortBy) {
+        case 'name':
+          return dir * a.localeCompare(b);
+        case 'size': {
+          const sa = dims[a]?.fileSize || 0;
+          const sb = dims[b]?.fileSize || 0;
+          return dir * (sa - sb);
+        }
+        case 'dimensions': {
+          const da = dims[a] ? Math.max(dims[a].width, dims[a].height) : 0;
+          const db = dims[b] ? Math.max(dims[b].width, dims[b].height) : 0;
+          return dir * (da - db);
+        }
+        case 'modified': {
+          const ma = dims[a]?.modified || 0;
+          const mb = dims[b]?.modified || 0;
+          return dir * (ma - mb);
+        }
+        default:
+          return 0;
+      }
     });
   }
 
@@ -1938,6 +1969,22 @@ function setupDimFilter() {
   });
 }
 
+function setupSort() {
+  const select = document.getElementById('sort-by');
+  const dirBtn = document.getElementById('sort-dir');
+
+  select.addEventListener('change', () => {
+    state.sortBy = select.value;
+    updateGrid();
+  });
+
+  dirBtn.addEventListener('click', () => {
+    state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+    dirBtn.textContent = state.sortDir === 'asc' ? '\u25B2' : '\u25BC';
+    updateGrid();
+  });
+}
+
 function updateDimFilterUI() {
   // Reset filter UI when new directory loaded
   document.querySelectorAll('.dim-preset').forEach(b => b.classList.remove('active'));
@@ -2058,6 +2105,7 @@ async function init() {
   setupSettings();
   setupDragSelect();
   setupDimFilter();
+  setupSort();
 
   // Apply saved theme
   if (state.metadata.theme) {
