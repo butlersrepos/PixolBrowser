@@ -20,6 +20,7 @@ const state = {
 let grid = null;
 let saveTimeout = null;
 let searchDebounce = null;
+let keyNavCursor = -1; // Tracks keyboard navigation position (separate from selection anchor)
 
 // ===== Config Accessors =====
 // All rule/tag access goes through the active config
@@ -215,10 +216,27 @@ class VirtualGrid {
     this.prevStartRow = startRow;
     this.prevEndRow = endRow;
     this.prevCols = cols;
+    this.cols = cols;
   }
 
   scrollToTop() {
     this.scrollEl.scrollTop = 0;
+  }
+
+  scrollToIndex(index) {
+    const cols = this.cols || Math.max(1, Math.floor((this.scrollEl.clientWidth - this.padding * 2 + this.gap) / (this.cellWidth + this.gap)));
+    const row = Math.floor(index / cols);
+    const rowHeight = this.cellHeight + this.gap;
+    const cellTop = this.padding + row * rowHeight;
+    const cellBottom = cellTop + this.cellHeight;
+    const scrollTop = this.scrollEl.scrollTop;
+    const viewHeight = this.scrollEl.clientHeight;
+
+    if (cellTop < scrollTop) {
+      this.scrollEl.scrollTop = cellTop - this.padding;
+    } else if (cellBottom > scrollTop + viewHeight) {
+      this.scrollEl.scrollTop = cellBottom - viewHeight + this.padding;
+    }
   }
 
   destroy() {
@@ -527,6 +545,7 @@ function handleCellClick(imagePath, index, event) {
     }
   }
 
+  keyNavCursor = state.lastClickedIndex;
   syncSelectionClasses();
   updateDetailPanel();
 }
@@ -2177,6 +2196,47 @@ async function init() {
       if (state.filteredImages.length > 0) {
         state.lastClickedIndex = state.filteredImages.length - 1;
       }
+      syncSelectionClasses();
+      updateDetailPanel();
+    }
+
+    // Arrow key gallery navigation
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && !inInput && grid && state.filteredImages.length > 0) {
+      e.preventDefault();
+      const cols = grid.cols || 1;
+      const total = state.filteredImages.length;
+
+      // Determine starting position
+      let pos = keyNavCursor >= 0 ? keyNavCursor : state.lastClickedIndex;
+      if (pos < 0 || pos >= total) {
+        pos = 0;
+      } else {
+        switch (e.key) {
+          case 'ArrowLeft':  pos = Math.max(0, pos - 1); break;
+          case 'ArrowRight': pos = Math.min(total - 1, pos + 1); break;
+          case 'ArrowUp':    pos = Math.max(0, pos - cols); break;
+          case 'ArrowDown':  pos = Math.min(total - 1, pos + cols); break;
+        }
+      }
+
+      keyNavCursor = pos;
+
+      if (e.shiftKey) {
+        // Range select from anchor to cursor
+        const anchor = state.lastClickedIndex >= 0 ? state.lastClickedIndex : 0;
+        state.selectedImages.clear();
+        const from = Math.min(anchor, pos);
+        const to = Math.max(anchor, pos);
+        for (let i = from; i <= to; i++) {
+          state.selectedImages.add(state.filteredImages[i]);
+        }
+      } else {
+        state.selectedImages.clear();
+        state.selectedImages.add(state.filteredImages[pos]);
+        state.lastClickedIndex = pos;
+      }
+
+      grid.scrollToIndex(pos);
       syncSelectionClasses();
       updateDetailPanel();
     }
