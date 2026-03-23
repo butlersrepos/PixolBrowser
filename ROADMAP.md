@@ -1,164 +1,206 @@
-# PixolBrowser
+# PixolBrowser Roadmap
 
-## What This Is
+Status legend: `[ ]` todo | `[x]` done | `[~]` in progress
 
-A desktop (Electron) and web image collection curator built for browsing, tagging, and searching large pixel art and sprite sheet collections. The user's primary pain point: they have 60k+ image assets spread across deeply nested folders and can't efficiently browse, compare, or organize them. This app flattens the folder structure into a searchable, taggable gallery.
+See `PROJECT_CONTEXT.md` for architecture, current features, and onboarding context.
 
-**Repo**: https://github.com/butlersrepos/PixolBrowser
-**Live web version**: https://butlersrepos.github.io/PixolBrowser/
+---
 
-## Architecture
+## Recently Completed
 
-- **Electron desktop app** — vanilla HTML/CSS/JS, no framework
-- **Web version** in `docs/` served by GitHub Pages, uses File System Access API + localStorage as a shim for Electron's IPC/Node APIs
-- **~4,500 lines** across 6 source files
-- **2 runtime dependencies**: `minimatch` (glob matching for rules)
-- **CI/CD**: GitHub Actions builds desktop releases on version tags (mac/win/linux), auto-deploys web version on push
+- [x] **Keyboard gallery navigation** — arrow keys move selection through grid, Shift+Arrow for range extend
+- [x] **Copy file path** — button in detail panel and carousel to copy absolute path to clipboard
+- [x] **Transparency checker background** — toggle between dark, checkerboard, white, or custom color in detail panel and carousel
 
-### Key Files
+---
 
-| File | Purpose |
-|------|---------|
-| `main.js` | Electron main process: window, IPC handlers, file scanning, dimension parsing |
-| `preload.js` | Context bridge exposing `window.api` to renderer |
-| `renderer/app.js` | All UI logic: virtual grid, carousel, zoom/pan, tagging, filtering, theming, settings |
-| `renderer/styles.css` | Full CSS with theme variables |
-| `renderer/index.html` | App shell with all modals |
-| `docs/web-shim.js` | Browser shim replacing Electron APIs with File System Access API + localStorage |
+## Batch 1: Quick Wins
 
-### Data Flow
+Independent features, any order. Immediate daily-use value.
 
-- Metadata stored in Electron's `userData` directory (`~/Library/Application Support/pixol-browser/metadata.json`)
-- Web version uses localStorage
-- Metadata contains: active config name, theme, saved themes, carousel bg preferences, last directory
-- Configs (rules, tags, excludes) stored under `metadata.configs["ConfigName"]`
-- All rule/tag access goes through `activeConfig()` accessor function
-- Image dimensions/fileSize/modified read from file headers during scan (raw buffer parsing, no deps)
-- Pre-lowercased path index and compiled regex cache for search/filter performance
-- Virtual scrolling grid only renders visible cells (~100 at a time)
+- [x] **1. Recent Directories** — "Recent Folders" dropdown in Open Folder flow. Persist last 5-10 opened directories. One click reopens without the directory picker.
+  - Touches: `main.js`, `renderer/app.js` (open-folder modal)
 
-## Current Features
+- [x] **2. Reveal in Finder/Explorer** — "Show in Finder" button in detail panel and carousel. Electron: `shell.showItemInFolder()`. Web: copy full path.
+  - Touches: `main.js` (IPC), `preload.js`, `renderer/app.js`
 
-### Gallery & Browsing
-- Open Folder modal with recursive toggle and image count preview before loading
-- Supports PNG, JPEG, GIF, WebP, BMP
-- Virtual-scrolling grid handles 60k+ images (only renders visible rows)
-- Cell labels show 2 parent folders for context (e.g., `Paladin/Shadows/attack.png`)
-- Click to select, Cmd+Click toggle, Shift+Click range, Cmd+A select all
-- Click to deselect, click empty space to deselect all
-- Drag-to-select rubber band selection
-- Image count badge floating in gallery top-right
+- [x] **3. Recently Viewed Images** — Track last 20 selected/inspected images. Collapsible sidebar section or dropdown. Persisted across sessions. Click to jump.
+  - Touches: `renderer/app.js`, metadata persistence
 
-### Filtering & Sorting
-- Search bar with debounce (150ms) and clear button
-- Dimension filter bar with presets (Tiny ≤32, Small 33-64, Med 65-128, Lg 129-256, XL 257+)
-- Custom min/max dimension range (Enter to apply)
-- Sort by Name, File Size, Dimensions, Date Modified with asc/desc toggle
-- Tag sidebar filtering (All, Untagged, or specific tag)
+- [x] **4. Fuzzy Quick-Open Overlay** — `Cmd+P`/`Ctrl+P` floating search. Fuzzy-match filenames with tiny thumbnails in results. Enter selects and scrolls to image. Escape dismisses.
+  - Touches: `renderer/app.js`, `renderer/styles.css`
 
-### Tagging
-- Manual tags on single or multi-selected images
-- Tag autocomplete from existing tags
-- Auto-tag rules with glob patterns and live match preview (debounced, shows file count + expandable file list)
-- Exclude patterns to hide files from gallery
-- Right-click tag in sidebar for "Remove from All" with confirmation
-- Multi-select tag removal with confirmation dialog
+---
 
-### Detail Panel (always visible, right side)
-- Single select: image preview with click-to-center zoom, scroll wheel zoom (8% multiplicative steps), drag to pan, reset button
-- Multi select: shows count, shared/partial tag indicators
-- File metadata (dimensions, size)
-- Copy filename button
-- Exclude button with confirmation
+## Batch 2: Sprite Sheet Workbench
 
-### Carousel (Inspect Mode)
-- Double-click or Enter to open, Escape or click backdrop to close
-- Inspect button in left panel with selection count badge
-- Full zoom/pan controls (same as detail panel)
-- Left/Right arrow navigation with wrapping (hidden for single image)
-- Per-image zoom/pan memory during session (persisted while carousel open, cleared on close)
-- Copy File button (copies actual file to macOS clipboard via osascript)
-- Background color picker (persisted per theme)
-- Filename and position counter in title bar
+Highest excitement features. Sequential dependencies within batch.
 
-### Theme System
-- Settings modal with left-nav categories (Theme, Rules & Tags)
-- 8 built-in presets: Dark (Default), Light, Game Boy, Pip-Boy, Virtual Boy, C64, SNES RPG, NES
-- Color pickers organized by group (Backgrounds, Text, Borders, Accent, Status)
-- Live preview — changes apply immediately
-- Save/Load/Delete custom themes
-- Export/Import themes as JSON
-- Copy current theme as JSON
-- Selected cell background derived from accent via `color-mix()`
+- [x] **5. Frame Grid Configurator** — In carousel, inputs for columns/rows. Semi-transparent grid overlay on image. Handle padding/gaps. Store grid config per image in metadata. Similar to Godot's sprite sheet editor.
+  - Touches: `renderer/app.js`
 
-### Config System (Rules & Tags)
-- Named configurations storing rules, exclude patterns, and manual tags
-- Default config always exists, auto-migrates from old flat metadata
-- Switch between configs in Settings → Rules & Tags (gallery reloads)
-- Save As clones active config under new name
-- Export as `.pixol-browser.json` file
-- Import from `.pixol-browser.json` file
-- Sidecar detection: opening a folder with a `.pixol-browser.json` prompts to import it
+- [x] **6. Animation Playback with FPS Control** — Play/Pause button + FPS slider (1-30 fps, default 12). Animate frames sequentially. Frame counter. Loop toggle.
+  - Depends on: #5
+  - Touches: `renderer/app.js`
 
-### Infrastructure
-- Custom app icon (macOS Dock via `app.dock.setIcon()`)
-- External links open in default browser
-- Feedback link in bottom-right corner → GitHub issues
-- Git pre-commit hook auto-syncs renderer files to `docs/`
-- GitHub Actions: desktop builds on version tag, web deploy on push to main
+- [x] **7. Single Frame Isolation** — Click grid cell to isolate frame full-size. Frame index display. Arrow key navigation between frames. Back button to full sheet.
+  - Depends on: #5
+  - Touches: `renderer/app.js`
 
-## Next Up (Prioritized)
+- [x] **8. Export Single Frame as PNG** — "Export Frame" button in isolation view. Canvas crop to clipboard or save as `originalname_frame_03.png`. Canvas toBlob + Electron save dialog.
+  - Depends on: #7
+  - Touches: `renderer/app.js`, `main.js` (save-file IPC)
 
-### High Priority
-- **Keyboard gallery navigation** — arrow keys to move selection through the grid without mouse. Up/down/left/right with wrap. Shift+Arrow for range extend.
-- **Copy file path** — button in detail panel and carousel to copy the absolute path to clipboard (alongside existing Copy File)
-- **Transparency checker background** — toggle between dark, checkerboard, white, or custom color behind images in the detail panel and carousel. Critical for pixel art with transparency.
+- [ ] **9. Auto-Grid Detection (experimental)** — "Detect Grid" button. Analyze sprite sheet for consistent transparent/solid columns/rows. Pre-fill column/row values. Jumpstart for manual config, doesn't need to be perfect.
+  - Depends on: #5
+  - Touches: `renderer/app.js`
 
-### Medium Priority
-- **Duplicate detection** — flag visually identical or near-identical images across the collection
-- **Star/Favorite rating** — quick 1-5 star rating per image for prioritizing assets
-- **Per-image notes** — small text field like "good but needs recolor" or "use for ice level"
-- **Export tagged set** — select a tag and export/copy all matching files into a flat folder
-- **Side-by-side compare** — pick two images, view them locked together with synced zoom/pan
-- **Color palette extraction** — show unique colors in a selected image
+---
 
-### Lower Priority
-- **Sprite sheet frame preview** — detect sprite sheets by dimensions and show animated preview cycling through frames
-- **Grid overlay in carousel** — toggle pixel grid at high zoom for checking tile alignment
-- **Batch rename** — select images and rename with a pattern
-- **Recent directories** — quick-switch between previously opened folders
-- **Pin images** — pin specific images to a persistent tray while browsing
-- **Batch tag from CSV** — import filename→tags mappings for bulk organization
-- **Drag-and-drop out** — drag images from gallery into Finder/Godot/Unity
+## Batch 3: Search Power Tools
 
-## Packaging & Distribution
+High daily-use value for short-burst sessions.
 
-electron-builder is already configured in `package.json`. To build:
+- [ ] **10. Omni Search with Prefix Modifiers** — Datadog-style syntax in existing search bar. Default: path match. `t:tagname` tag filter, `s:small` or `s:32-64` dimensions, `d:recent` date, `f:png` file type. Combine freely: `knight t:character s:small`. Autocomplete after prefixes.
+  - Touches: `renderer/app.js`
 
-```bash
-npm run dist:mac   # .dmg (universal binary)
-npm run dist:win   # .exe installer
-npm run dist:linux # .AppImage
+- [ ] **11. Search History** — Last 15 queries. Arrow-down in empty bar shows history dropdown. Click to restore. Clear option.
+  - Touches: `renderer/app.js`, metadata
+
+- [ ] **12. Saved Searches** — "Save Current View" captures full filter state (query + tag + dimension + sort). Named saved searches in sidebar. One click restores. Edit/delete.
+  - Touches: `renderer/app.js`, metadata
+
+---
+
+## Batch 4: Region Selection & Tile Tools
+
+Innovative differentiator. Sequential dependencies.
+
+- [ ] **13. Region Select Tool** — "Select Region" mode in carousel. Drag rectangle, snaps to pixel boundaries. Shows dimensions. Resize handles. Store per image in metadata.
+  - Touches: `renderer/app.js`
+
+- [ ] **14. Tiled Preview Panel** — After selecting region, "Tile Preview" button. Side panel repeats region in configurable NxN grid (3x3, 5x5). Reveals seams and tile connections.
+  - Depends on: #13
+  - Touches: `renderer/app.js`
+
+- [ ] **15. Region Copy/Export** — Copy or save selected region as PNG. Full workflow: browse tileset, select tile, preview tiled, export.
+  - Depends on: #13
+  - Touches: `renderer/app.js`
+
+---
+
+## Batch 5: Project & Export Architecture
+
+Foundational refactor. Sequential dependencies.
+
+- [ ] **16. Content-Hash Identity for Metadata** — Compute xxHash of full file contents during scan (~120ms for 60k files). Key metadata by hash, path as secondary index. Reconcile moved/renamed files on rescan. Migrate existing path-keyed metadata.
+  - Touches: `main.js`, `renderer/app.js`
+  - Note: May add xxhash dependency or use pure-JS implementation
+
+- [ ] **17. Project Profiles (Config Refactor)** — Rename Configs to Project Profiles. Split into shared Tag Library (rules, tags, excludes) + per-profile settings (export folders, prefs). Auto-tag rules gain `scope` field: `"universal"` (default) or array of profile names. Sidebar shows universal + active profile tags only.
+  - Touches: `renderer/app.js`, metadata schema migration
+
+- [ ] **18. Export Destinations per Profile** — Each profile stores 1-3 export folders. Configure in Settings > Project Profile. "Copy to Project" button copies file to active profile's export folder.
+  - Depends on: #17
+  - Touches: `renderer/app.js`, `main.js` (file copy IPC)
+
+- [ ] **19. Direct Copy-to-Project Button** — Prominent "Send to Project" alongside existing "Copy File" in detail panel and carousel. One click if destinations configured, prompts to set up if not. Clipboard copy stays as-is.
+  - Depends on: #18
+  - Touches: `renderer/app.js`
+
+- [ ] **20. Tag-Based Export** — Right-click tag > "Export All Tagged Files." Copy to destination or active profile export folder. Flatten or preserve structure. Progress indicator.
+  - Touches: `renderer/app.js`, `main.js` (batch file copy IPC)
+
+---
+
+## Batch 6: Organization & Ergonomics
+
+- [ ] **21. Nested/Hierarchical Tags** — `/` separator: `Characters/Paladin`, `Tiles/Ground`. Sidebar renders as collapsible groups (Gmail style). Parent tag filter includes children.
+  - Touches: `renderer/app.js`
+
+- [ ] **22. Asset Shopping Cart** — Toolbar icon with badge count. Add to cart while browsing. Cart panel with remove. "Export Cart" batch copies to profile export folder. Persists during session.
+  - Touches: `renderer/app.js`
+
+- [ ] **23. Drag-and-Drop Out** — Drag images from gallery into Finder/Godot/Unity. Electron `startDrag` API. Web: not supported (tooltip explaining).
+  - Touches: `main.js`, `renderer/app.js`
+
+---
+
+## Batch 7: Polish & Delight
+
+- [ ] **24. Animation Preview in Gallery Cells** — For images with saved grid config, show play icon on thumbnail. On hover, animate frames at low FPS (6-8). Adds life to gallery.
+  - Depends on: #5
+  - Touches: `renderer/app.js`
+
+- [ ] **25. Inline Carousel (Detail Panel Context Switch)** — Carousel becomes inline: gallery narrowed on left, carousel on right where detail panel was. Metadata/tags/export below carousel image. Major layout refactor.
+  - Touches: `renderer/app.js`, `renderer/styles.css`
+
+- [ ] **26. Sprite Sheet Auto-Detection Indicator** — Flag images where width is exact multiple of height (common ratios). Subtle badge on gallery thumbnails. Visual hint, not guarantee.
+  - Touches: `renderer/app.js`
+
+---
+
+## Batch 8: Differentiator Features
+
+High-impact, higher complexity. These are where PixolBrowser differentiates from Aseprite — simpler UI for workflows game devs repeat.
+
+- [ ] **27. Palette Swap Preview** — Extract unique color palette from sprite. Display as swatches. Select target palette (presets or custom). Real-time recolor preview. Export recolored PNG.
+  - Touches: `renderer/app.js`
+
+- [ ] **28. Sprite Sheet Composition** — Select isolated frames from different sheets. Arrange on canvas. Set frame size, rows/columns, spacing. Export as new PNG. Primary use case: cherry-pick frames from related sheets to build custom animations.
+  - Depends on: #7
+  - Touches: `renderer/app.js`
+
+---
+
+## Batch 9: Future Horizon
+
+Explore when core is solid.
+
+- [ ] **29. Browse Game Project for Asset Audit** — Open game project folder, cross-reference with asset library by filename/hash. Identify duplicates, already-used assets. Hygiene and discovery tool.
+
+- [ ] **30. Shareable Web Galleries** — Export curated subset as standalone static HTML gallery. Share link with collaborators. Hosting challenge: images must be embedded or uploaded.
+
+- [ ] **31. Image Annotations** — Draw circles, arrows, text on assets without modifying files. Stored in metadata by content hash. Requires #16 first.
+
+---
+
+## Previously Considered (Parked)
+
+These were on the old roadmap but have been superseded or deprioritized:
+
+- **Duplicate detection** — Partially addressed by #16 (content-hash) and #29 (asset audit)
+- **Star/Favorite rating** — Replaced by tag-based organization and shopping cart (#22)
+- **Per-image notes** — Replaced by annotations (#31) which are more visual and spatial
+- **Side-by-side compare** — May revisit; lower priority than sprite workbench features
+- **Batch rename** — Low demand relative to other features
+- **Pin images** — Replaced by shopping cart (#22)
+- **Batch tag from CSV** — Low demand relative to omni search and saved searches
+- **Grid overlay in carousel** — Subsumed by frame grid configurator (#5)
+- **Color palette extraction** — Subsumed by palette swap preview (#27)
+
+---
+
+## Key Dependencies
+
 ```
+#5 Grid Configurator
+ |-> #6 Animation Playback
+ |-> #7 Frame Isolation -> #8 Export Frame -> #28 Sheet Composition
+ |-> #9 Auto-Grid Detection
+ |-> #24 Animation in Gallery
 
-GitHub Actions builds all three on version tag push (`git tag v1.0.0 && git push --tags`).
+#13 Region Select
+ |-> #14 Tiled Preview
+ |-> #15 Region Export
 
-### For selling commercially:
-- **Code sign** with Apple Developer certificate (macOS)
-- **Notarize** for macOS (Apple malware scan)
-- **Auto-updates** via electron-updater
-- **Distribution**: Gumroad, itch.io, or Mac App Store
+#16 Content-Hash Identity
+ |-> #17 Project Profiles -> #18 Export Destinations -> #19 Copy-to-Project
+ |-> #31 Annotations
 
-### For npx distribution:
-- Add `"bin"` entry to `package.json`
-- Move `electron` to `dependencies`
-- `npm publish` → users run `npx pixol-browser`
+#10 Omni Search
+ |-> #11 Search History
+ |-> #12 Saved Searches
 
-## Web Version Notes
-
-- Lives in `docs/`, deployed via GitHub Pages
-- `web-shim.js` provides `window.api` using File System Access API + localStorage
-- `toFileUrl()` checks `window._blobUrls` map (populated during scan) before falling back to `file://` URLs
-- Chrome/Edge only (requires `showDirectoryPicker`) — compatibility banner shown on unsupported browsers
-- Copy File in carousel copies image data to clipboard (not the file itself, browser limitation)
-- Pre-commit hook + GitHub Actions workflow keep `docs/` in sync with `renderer/`
+Batch 1 items are fully independent.
+```
