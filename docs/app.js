@@ -591,12 +591,15 @@ function updateDetailPanel() {
   const copyBtn = document.getElementById('btn-copy-name');
   const copyPathBtn = document.getElementById('btn-copy-path');
 
+  const revealBtn = document.getElementById('btn-reveal');
+
   if (count === 1) {
     // Single selection: show full detail with preview
     const imagePath = [...state.selectedImages][0];
     imageWrapper.style.display = '';
     copyBtn.style.display = '';
     copyPathBtn.style.display = '';
+    revealBtn.style.display = '';
     img.src = toFileUrl(imagePath);
 
     filenameEl.textContent = basename(imagePath);
@@ -626,6 +629,7 @@ function updateDetailPanel() {
     imageWrapper.style.display = 'none';
     copyBtn.style.display = 'none';
     copyPathBtn.style.display = 'none';
+    revealBtn.style.display = 'none';
     filenameEl.textContent = `${count} images selected`;
     pathEl.textContent = 'Tags applied will affect all selected images';
     metaEl.textContent = '';
@@ -1262,6 +1266,20 @@ function setupCarousel() {
     const orig = copyPathBtn.innerHTML;
     copyPathBtn.textContent = 'Copied!';
     setTimeout(() => { copyPathBtn.innerHTML = orig; }, 1500);
+  });
+
+  // Reveal in Finder from carousel
+  const revealBtn = document.getElementById('carousel-reveal');
+  revealBtn.addEventListener('click', () => {
+    const filePath = carousel.items[carousel.currentIndex];
+    if (window.api.showItemInFolder) {
+      window.api.showItemInFolder(filePath);
+    } else {
+      navigator.clipboard.writeText(filePath);
+      const orig = revealBtn.innerHTML;
+      revealBtn.textContent = 'Copied path!';
+      setTimeout(() => { revealBtn.innerHTML = orig; }, 1500);
+    }
   });
 
   // Carousel background mode bar
@@ -2193,6 +2211,21 @@ async function init() {
       const orig = btn.innerHTML;
       btn.textContent = '\u2713';
       setTimeout(() => { btn.innerHTML = orig; }, 1200);
+    }
+  });
+
+  document.getElementById('btn-reveal').addEventListener('click', () => {
+    if (state.selectedImages.size === 1) {
+      const filePath = [...state.selectedImages][0];
+      if (window.api.showItemInFolder) {
+        window.api.showItemInFolder(filePath);
+      } else {
+        navigator.clipboard.writeText(filePath);
+        const btn = document.getElementById('btn-reveal');
+        const orig = btn.innerHTML;
+        btn.textContent = '\u2713';
+        setTimeout(() => { btn.innerHTML = orig; }, 1200);
+      }
     }
   });
 

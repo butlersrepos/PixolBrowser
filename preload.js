@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   loadMetadata: () => ipcRenderer.invoke('load-metadata'),
   saveMetadata: (metadata) => ipcRenderer.invoke('save-metadata', metadata),
   copyFileToClipboard: (filePath) => ipcRenderer.invoke('copy-file-to-clipboard', filePath),
+  showItemInFolder: (filePath) => ipcRenderer.invoke('show-item-in-folder', filePath),
   getAllDimensions: (filePaths) => ipcRenderer.invoke('get-all-dimensions', filePaths),
   findSidecars: (dirPath) => ipcRenderer.invoke('find-sidecars', dirPath),
   readSidecar: (filePath) => ipcRenderer.invoke('read-sidecar', filePath),

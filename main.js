@@ -250,6 +250,12 @@ ipcMain.handle('get-relative-path', (_event, filePath, basePath) => {
   return path.relative(basePath, filePath);
 });
 
+// Show file in OS file manager
+ipcMain.handle('show-item-in-folder', (_event, filePath) => {
+  shell.showItemInFolder(filePath);
+  return true;
+});
+
 // Copy file to system clipboard (macOS: pasteboard, so user can Cmd+V into Finder/apps)
 ipcMain.handle('copy-file-to-clipboard', async (_event, filePath) => {
   const { exec } = require('child_process');
