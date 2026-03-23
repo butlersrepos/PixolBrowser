@@ -1276,6 +1276,12 @@ function closeCarousel() {
   carousel.active = false;
   carousel.viewStates.clear();
   document.getElementById('carousel').classList.add('hidden');
+  // Reset sprite grid UI
+  spriteGrid.enabled = false;
+  document.getElementById('carousel-sprite-bar').classList.add('hidden');
+  document.getElementById('carousel-sprite-toggle').classList.remove('active');
+  const canvas = document.getElementById('carousel-grid-overlay');
+  if (canvas) { canvas.width = 0; canvas.height = 0; }
 }
 
 function saveCarouselView() {
@@ -1291,7 +1297,21 @@ function loadCarouselImage() {
   img.src = toFileUrl(carousel.items[carousel.currentIndex]);
   document.getElementById('carousel-filename').textContent = basename(carousel.items[carousel.currentIndex]);
   document.getElementById('carousel-counter').textContent = `${carousel.currentIndex + 1} / ${carousel.items.length}`;
-  // Reset zoom on image change — computeBase + resetView called from img load handler
+  // Load sprite config for this image
+  if (spriteGrid.enabled) {
+    const config = getSpriteConfig(carousel.items[carousel.currentIndex]);
+    if (config) {
+      spriteGrid.cols = config.cols;
+      spriteGrid.rows = config.rows;
+      document.getElementById('sprite-cols').value = config.cols;
+      document.getElementById('sprite-rows').value = config.rows;
+    } else {
+      spriteGrid.cols = 1;
+      spriteGrid.rows = 1;
+      document.getElementById('sprite-cols').value = 1;
+      document.getElementById('sprite-rows').value = 1;
+    }
+  }
 }
 
 function carouselNav(delta) {
@@ -1299,6 +1319,142 @@ function carouselNav(delta) {
   saveCarouselView();
   carousel.currentIndex = (carousel.currentIndex + delta + carousel.items.length) % carousel.items.length;
   loadCarouselImage();
+}
+
+// ===== Sprite Grid =====
+const spriteGrid = {
+  enabled: false,
+  cols: 1,
+  rows: 1,
+};
+
+function getSpriteConfig(imagePath) {
+  return state.metadata?.spriteConfigs?.[imagePath] || null;
+}
+
+function saveSpriteConfig(imagePath, cols, rows) {
+  if (!state.metadata) return;
+  if (!state.metadata.spriteConfigs) state.metadata.spriteConfigs = {};
+  state.metadata.spriteConfigs[imagePath] = { cols, rows };
+  scheduleSave();
+}
+
+function clearSpriteConfig(imagePath) {
+  if (!state.metadata?.spriteConfigs) return;
+  delete state.metadata.spriteConfigs[imagePath];
+  scheduleSave();
+}
+
+function drawGridOverlay() {
+  const canvas = document.getElementById('carousel-grid-overlay');
+  const img = document.getElementById('carousel-image');
+  const wrapper = document.getElementById('carousel-image-wrapper');
+  if (!canvas || !spriteGrid.enabled || spriteGrid.cols <= 1 && spriteGrid.rows <= 1) {
+    canvas.width = 0;
+    canvas.height = 0;
+    return;
+  }
+
+  // Match canvas to wrapper size
+  canvas.width = wrapper.clientWidth;
+  canvas.height = wrapper.clientHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Get the image transform from carousel state
+  const baseW = carousel.baseW;
+  const baseH = carousel.baseH;
+  if (!baseW || !baseH) return;
+
+  const z = carousel.zoom;
+  const px = carousel.panX;
+  const py = carousel.panY;
+  const dispW = baseW * z;
+  const dispH = baseH * z;
+
+  const cols = spriteGrid.cols;
+  const rows = spriteGrid.rows;
+  const cellW = dispW / cols;
+  const cellH = dispH / rows;
+
+  ctx.strokeStyle = 'rgba(88, 166, 255, 0.5)';
+  ctx.lineWidth = 1;
+
+  // Vertical lines
+  for (let c = 1; c < cols; c++) {
+    const x = Math.round(px + c * cellW) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x, py);
+    ctx.lineTo(x, py + dispH);
+    ctx.stroke();
+  }
+
+  // Horizontal lines
+  for (let r = 1; r < rows; r++) {
+    const y = Math.round(py + r * cellH) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(px, y);
+    ctx.lineTo(px + dispW, y);
+    ctx.stroke();
+  }
+
+  // Border
+  ctx.strokeStyle = 'rgba(88, 166, 255, 0.3)';
+  ctx.strokeRect(Math.round(px) + 0.5, Math.round(py) + 0.5, Math.round(dispW), Math.round(dispH));
+
+  // Frame info
+  const totalFrames = cols * rows;
+  const frameW = img.naturalWidth / cols;
+  const frameH = img.naturalHeight / rows;
+  document.getElementById('sprite-frame-info').textContent = `${totalFrames} frames (${Math.round(frameW)}x${Math.round(frameH)} each)`;
+}
+
+function setupSpriteGrid() {
+  const toggleBtn = document.getElementById('carousel-sprite-toggle');
+  const bar = document.getElementById('carousel-sprite-bar');
+  const colsInput = document.getElementById('sprite-cols');
+  const rowsInput = document.getElementById('sprite-rows');
+  const applyBtn = document.getElementById('sprite-grid-apply');
+  const clearBtn = document.getElementById('sprite-grid-clear');
+
+  toggleBtn.addEventListener('click', () => {
+    spriteGrid.enabled = !spriteGrid.enabled;
+    bar.classList.toggle('hidden', !spriteGrid.enabled);
+    toggleBtn.classList.toggle('active', spriteGrid.enabled);
+    if (spriteGrid.enabled) {
+      // Load saved config for current image
+      const config = getSpriteConfig(carousel.items[carousel.currentIndex]);
+      if (config) {
+        colsInput.value = config.cols;
+        rowsInput.value = config.rows;
+        spriteGrid.cols = config.cols;
+        spriteGrid.rows = config.rows;
+      }
+    }
+    drawGridOverlay();
+  });
+
+  function applyGrid() {
+    spriteGrid.cols = Math.max(1, parseInt(colsInput.value) || 1);
+    spriteGrid.rows = Math.max(1, parseInt(rowsInput.value) || 1);
+    colsInput.value = spriteGrid.cols;
+    rowsInput.value = spriteGrid.rows;
+    saveSpriteConfig(carousel.items[carousel.currentIndex], spriteGrid.cols, spriteGrid.rows);
+    drawGridOverlay();
+  }
+
+  applyBtn.addEventListener('click', applyGrid);
+  colsInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyGrid(); });
+  rowsInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyGrid(); });
+
+  clearBtn.addEventListener('click', () => {
+    spriteGrid.cols = 1;
+    spriteGrid.rows = 1;
+    colsInput.value = 1;
+    rowsInput.value = 1;
+    clearSpriteConfig(carousel.items[carousel.currentIndex]);
+    drawGridOverlay();
+  });
 }
 
 function setupCarousel() {
@@ -1335,6 +1491,7 @@ function setupCarousel() {
     const isZoomed = carousel.zoom > 1;
     wrapper.classList.toggle('zoomed-in', isZoomed && !carousel.isPanning);
     wrapper.classList.toggle('panning', carousel.isPanning);
+    drawGridOverlay();
   }
 
   img.addEventListener('load', () => {
@@ -2442,6 +2599,7 @@ async function init() {
   setupDetailZoom();
   setupBgModeBar('detail-bg-bar', 'detail-image-wrapper', 'detail-bg-color', 'detailBgMode');
   setupCarousel();
+  setupSpriteGrid();
   setupSettings();
   setupDragSelect();
   setupDimFilter();

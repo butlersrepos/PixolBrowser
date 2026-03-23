@@ -1093,6 +1093,62 @@ html, body {
   border-color: var(--border);
   color: var(--text);
 }
+.carousel-titlebar-btn.active {
+  background: color-mix(in srgb, var(--accent) 20%, var(--card));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Sprite Sheet Bar */
+.carousel-sprite-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.carousel-sprite-bar.hidden { display: none; }
+.sprite-bar-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.sprite-bar-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.sprite-bar-field input {
+  width: 50px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+  outline: none;
+  -moz-appearance: textfield;
+}
+.sprite-bar-field input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.sprite-bar-field input:focus { border-color: var(--accent); }
+.sprite-bar-spacer { flex: 1; }
+.sprite-frame-info {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.carousel-grid-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 1;
+}
 
 #carousel-image-wrapper {
   position: relative;

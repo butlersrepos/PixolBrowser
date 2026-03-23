@@ -169,6 +169,7 @@
         <button id="carousel-copy-file" class="carousel-titlebar-btn carousel-text-btn" title="Copy file to clipboard">&#128203; Copy File</button>
         <button id="carousel-copy-path" class="carousel-titlebar-btn carousel-text-btn" title="Copy file path">&#128194; Copy Path</button>
         <button id="carousel-reveal" class="carousel-titlebar-btn carousel-text-btn" title="Show in Finder">&#128269; Reveal</button>
+        <button id="carousel-sprite-toggle" class="carousel-titlebar-btn carousel-text-btn" title="Sprite sheet tools">&#9638; Grid</button>
         <div id="carousel-bg-bar" class="bg-mode-bar">
           <button data-bg="dark" class="active" title="Dark background">Dark</button>
           <button data-bg="checker" title="Checkerboard">&#9638;</button>
@@ -179,8 +180,18 @@
         <button id="carousel-reset" class="carousel-titlebar-btn" title="Reset zoom">&#8982;</button>
         <button id="carousel-close" class="carousel-titlebar-btn" title="Close (Esc)">&times;</button>
       </div>
+      <div id="carousel-sprite-bar" class="carousel-sprite-bar hidden">
+        <span class="sprite-bar-label">Grid:</span>
+        <label class="sprite-bar-field">Cols <input type="number" id="sprite-cols" min="1" max="100" value="1" /></label>
+        <label class="sprite-bar-field">Rows <input type="number" id="sprite-rows" min="1" max="100" value="1" /></label>
+        <button id="sprite-grid-apply" class="btn-sm btn-primary">Apply</button>
+        <button id="sprite-grid-clear" class="btn-sm btn-secondary">Clear</button>
+        <div class="sprite-bar-spacer"></div>
+        <span id="sprite-frame-info" class="sprite-frame-info"></span>
+      </div>
       <div id="carousel-image-wrapper">
         <img id="carousel-image" />
+        <canvas id="carousel-grid-overlay" class="carousel-grid-overlay"></canvas>
       </div>
       <button id="carousel-prev" class="carousel-btn carousel-btn-prev" title="Previous (Left arrow)">&#8249;</button>
       <button id="carousel-next" class="carousel-btn carousel-btn-next" title="Next (Right arrow)">&#8250;</button>
