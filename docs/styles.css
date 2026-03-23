@@ -1162,6 +1162,10 @@ html, body {
   pointer-events: none;
   z-index: 1;
 }
+.carousel-grid-overlay.interactive {
+  pointer-events: auto;
+  cursor: pointer;
+}
 
 #carousel-image-wrapper {
   position: relative;

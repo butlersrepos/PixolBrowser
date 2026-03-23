@@ -1320,6 +1320,7 @@ function loadCarouselImage() {
 function carouselNav(delta) {
   if (carousel.items.length <= 1) return;
   if (spriteGrid.playing) spriteAnimStop();
+  if (spriteGrid.isolated) spriteExitIsolation();
   document.getElementById('carousel-image').style.visibility = '';
   saveCarouselView();
   carousel.currentIndex = (carousel.currentIndex + delta + carousel.items.length) % carousel.items.length;
@@ -1335,6 +1336,9 @@ const spriteGrid = {
   playing: false,
   currentFrame: 0,
   animTimer: null,
+  // Isolation state
+  isolated: false,
+  isolatedFrame: 0,
 };
 
 function getSpriteConfig(imagePath) {
@@ -1504,6 +1508,73 @@ function spriteAnimShowFrame() {
   document.getElementById('sprite-frame-info').textContent = `Frame ${spriteGrid.currentFrame + 1}/${totalFrames} (${Math.round(frameW)}x${Math.round(frameH)})`;
 }
 
+function spriteIsolateFrame(frameIdx) {
+  const img = document.getElementById('carousel-image');
+  const canvas = document.getElementById('carousel-grid-overlay');
+  const wrapper = document.getElementById('carousel-image-wrapper');
+  if (!img.naturalWidth) return;
+
+  const cols = spriteGrid.cols;
+  const rows = spriteGrid.rows;
+  const totalFrames = cols * rows;
+  if (frameIdx < 0 || frameIdx >= totalFrames) return;
+
+  spriteGrid.isolated = true;
+  spriteGrid.isolatedFrame = frameIdx;
+  if (spriteGrid.playing) spriteAnimStop();
+
+  const frameW = img.naturalWidth / cols;
+  const frameH = img.naturalHeight / rows;
+  const col = frameIdx % cols;
+  const row = Math.floor(frameIdx / cols);
+
+  canvas.width = wrapper.clientWidth;
+  canvas.height = wrapper.clientHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const scale = Math.min(canvas.width / frameW, canvas.height / frameH);
+  const dw = frameW * scale;
+  const dh = frameH * scale;
+  const dx = (canvas.width - dw) / 2;
+  const dy = (canvas.height - dh) / 2;
+
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, col * frameW, row * frameH, frameW, frameH, dx, dy, dw, dh);
+
+  img.style.visibility = 'hidden';
+  document.getElementById('sprite-frame-info').textContent = `Frame ${frameIdx + 1}/${totalFrames} (${Math.round(frameW)}x${Math.round(frameH)}) — Click canvas or press Esc to go back`;
+
+  // Show back button
+  let backBtn = document.getElementById('sprite-back-btn');
+  if (!backBtn) {
+    backBtn = document.createElement('button');
+    backBtn.id = 'sprite-back-btn';
+    backBtn.className = 'btn-sm btn-secondary';
+    backBtn.textContent = 'Back to Sheet';
+    backBtn.addEventListener('click', spriteExitIsolation);
+    document.getElementById('carousel-sprite-bar').appendChild(backBtn);
+  }
+  backBtn.style.display = '';
+}
+
+function spriteExitIsolation() {
+  spriteGrid.isolated = false;
+  document.getElementById('carousel-image').style.visibility = '';
+  const backBtn = document.getElementById('sprite-back-btn');
+  if (backBtn) backBtn.style.display = 'none';
+  drawGridOverlay();
+}
+
+function spriteIsolateNav(delta) {
+  if (!spriteGrid.isolated) return;
+  const totalFrames = spriteGrid.cols * spriteGrid.rows;
+  let next = spriteGrid.isolatedFrame + delta;
+  if (next < 0) next = totalFrames - 1;
+  if (next >= totalFrames) next = 0;
+  spriteIsolateFrame(next);
+}
+
 function setupSpriteGrid() {
   const toggleBtn = document.getElementById('carousel-sprite-toggle');
   const bar = document.getElementById('carousel-sprite-bar');
@@ -1531,13 +1602,16 @@ function setupSpriteGrid() {
 
   function applyGrid() {
     if (spriteGrid.playing) spriteAnimStop();
+    if (spriteGrid.isolated) spriteExitIsolation();
     document.getElementById('carousel-image').style.visibility = '';
     spriteGrid.cols = Math.max(1, parseInt(colsInput.value) || 1);
     spriteGrid.rows = Math.max(1, parseInt(rowsInput.value) || 1);
     colsInput.value = spriteGrid.cols;
     rowsInput.value = spriteGrid.rows;
     saveSpriteConfig(carousel.items[carousel.currentIndex], spriteGrid.cols, spriteGrid.rows);
-    document.getElementById('sprite-play').disabled = (spriteGrid.cols * spriteGrid.rows <= 1);
+    const hasGrid = spriteGrid.cols * spriteGrid.rows > 1;
+    document.getElementById('sprite-play').disabled = !hasGrid;
+    document.getElementById('carousel-grid-overlay').classList.toggle('interactive', hasGrid);
     drawGridOverlay();
   }
 
@@ -1547,13 +1621,48 @@ function setupSpriteGrid() {
 
   clearBtn.addEventListener('click', () => {
     if (spriteGrid.playing) spriteAnimStop();
+    if (spriteGrid.isolated) spriteExitIsolation();
+    document.getElementById('carousel-image').style.visibility = '';
     spriteGrid.cols = 1;
     spriteGrid.rows = 1;
     colsInput.value = 1;
     rowsInput.value = 1;
     clearSpriteConfig(carousel.items[carousel.currentIndex]);
     document.getElementById('sprite-play').disabled = true;
+    document.getElementById('carousel-grid-overlay').classList.remove('interactive');
     drawGridOverlay();
+  });
+
+  // Grid cell click for frame isolation
+  const gridCanvas = document.getElementById('carousel-grid-overlay');
+  gridCanvas.addEventListener('click', (e) => {
+    if (!spriteGrid.enabled || spriteGrid.cols <= 1 && spriteGrid.rows <= 1) return;
+    if (spriteGrid.playing) return;
+    if (spriteGrid.isolated) {
+      spriteExitIsolation();
+      return;
+    }
+
+    const rect = gridCanvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const z = carousel.zoom;
+    const dispW = carousel.baseW * z;
+    const dispH = carousel.baseH * z;
+    const px = carousel.panX;
+    const py = carousel.panY;
+
+    // Check if click is within the image bounds
+    if (x < px || x > px + dispW || y < py || y > py + dispH) return;
+
+    const relX = (x - px) / dispW;
+    const relY = (y - py) / dispH;
+    const col = Math.floor(relX * spriteGrid.cols);
+    const row = Math.floor(relY * spriteGrid.rows);
+    const frameIdx = row * spriteGrid.cols + col;
+
+    spriteIsolateFrame(frameIdx);
   });
 
   // Animation controls
@@ -2768,7 +2877,15 @@ async function init() {
 
     // Carousel keys take priority when active
     if (carousel.active) {
-      if (e.key === 'Escape') { closeCarousel(); e.preventDefault(); return; }
+      if (e.key === 'Escape') {
+        if (spriteGrid.isolated) { spriteExitIsolation(); e.preventDefault(); return; }
+        closeCarousel(); e.preventDefault(); return;
+      }
+      if (spriteGrid.isolated) {
+        if (e.key === 'ArrowLeft') { spriteIsolateNav(-1); e.preventDefault(); return; }
+        if (e.key === 'ArrowRight') { spriteIsolateNav(1); e.preventDefault(); return; }
+        return;
+      }
       if (e.key === 'ArrowLeft') { carouselNav(-1); e.preventDefault(); return; }
       if (e.key === 'ArrowRight') { carouselNav(1); e.preventDefault(); return; }
       return;
