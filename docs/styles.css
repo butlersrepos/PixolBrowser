@@ -306,6 +306,60 @@ html, body {
   overflow-y: auto;
 }
 
+/* Recent Images */
+.recent-images-section { border-top: 1px solid var(--border); }
+.recent-images-section.hidden { display: none; }
+.recent-images-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 14px 4px;
+  cursor: pointer;
+  user-select: none;
+}
+.recent-images-label {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+.recent-images-toggle {
+  font-size: 10px;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+.recent-images-toggle.collapsed { transform: rotate(-90deg); }
+.recent-images-list {
+  max-height: 180px;
+  overflow-y: auto;
+}
+.recent-images-list.collapsed { display: none; }
+.recent-image-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 14px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.recent-image-item:hover { background: var(--card); }
+.recent-image-thumb {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+  border-radius: 2px;
+}
+.recent-image-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 #sidebar-actions {
   padding: 10px;
   border-top: 1px solid var(--border);

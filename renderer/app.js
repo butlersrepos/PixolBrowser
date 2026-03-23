@@ -21,6 +21,7 @@ let grid = null;
 let saveTimeout = null;
 let searchDebounce = null;
 let keyNavCursor = -1; // Tracks keyboard navigation position (separate from selection anchor)
+let recentImagesCollapsed = false;
 
 // ===== Config Accessors =====
 // All rule/tag access goes through the active config
@@ -596,6 +597,7 @@ function updateDetailPanel() {
   if (count === 1) {
     // Single selection: show full detail with preview
     const imagePath = [...state.selectedImages][0];
+    trackRecentImage(imagePath);
     imageWrapper.style.display = '';
     copyBtn.style.display = '';
     copyPathBtn.style.display = '';
@@ -987,6 +989,65 @@ function scheduleSave() {
   saveTimeout = setTimeout(() => {
     window.api.saveMetadata(state.metadata);
   }, 500);
+}
+
+// ===== Recent Images =====
+function trackRecentImage(imagePath) {
+  if (!state.metadata) return;
+  if (!state.metadata.recentImages) state.metadata.recentImages = [];
+  state.metadata.recentImages = [imagePath, ...state.metadata.recentImages.filter(p => p !== imagePath)].slice(0, 20);
+  scheduleSave();
+  renderRecentImages();
+}
+
+function renderRecentImages() {
+  const section = document.getElementById('recent-images');
+  const list = document.getElementById('recent-images-list');
+  const recent = (state.metadata?.recentImages || []).filter(p => state.allImages.includes(p));
+  if (recent.length === 0) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+  list.innerHTML = '';
+  for (const imgPath of recent) {
+    const item = document.createElement('div');
+    item.className = 'recent-image-item';
+    item.title = relativePath(imgPath);
+    const thumb = document.createElement('img');
+    thumb.className = 'recent-image-thumb';
+    thumb.src = toFileUrl(imgPath);
+    thumb.loading = 'lazy';
+    const name = document.createElement('span');
+    name.className = 'recent-image-name';
+    name.textContent = basename(imgPath);
+    item.appendChild(thumb);
+    item.appendChild(name);
+    item.addEventListener('click', () => {
+      const idx = state.filteredImages.indexOf(imgPath);
+      if (idx >= 0) {
+        state.selectedImages.clear();
+        state.selectedImages.add(imgPath);
+        state.lastClickedIndex = idx;
+        keyNavCursor = idx;
+        grid.scrollToIndex(idx);
+        syncSelectionClasses();
+        updateDetailPanel();
+      }
+    });
+    list.appendChild(item);
+  }
+}
+
+function setupRecentImages() {
+  const header = document.getElementById('recent-images-header');
+  const toggle = document.getElementById('recent-images-toggle');
+  const list = document.getElementById('recent-images-list');
+  header.addEventListener('click', () => {
+    recentImagesCollapsed = !recentImagesCollapsed;
+    toggle.classList.toggle('collapsed', recentImagesCollapsed);
+    list.classList.toggle('collapsed', recentImagesCollapsed);
+  });
 }
 
 // ===== Helpers =====
@@ -2254,6 +2315,7 @@ async function init() {
   setupDragSelect();
   setupDimFilter();
   setupSort();
+  setupRecentImages();
 
   // Apply saved theme
   if (state.metadata.theme) {
@@ -2546,6 +2608,7 @@ async function scanDirectory(dirPath, recursive) {
     activateFilter();
     updateGrid();
     updateDimFilterUI();
+    renderRecentImages();
 
   } finally {
     overlay.classList.add('hidden');
