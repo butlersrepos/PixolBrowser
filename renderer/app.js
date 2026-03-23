@@ -1061,9 +1061,14 @@ function openCarousel(items, startIndex) {
   carousel.active = true;
   carousel.viewStates.clear();
   document.getElementById('carousel').classList.remove('hidden');
-  const bg = getCarouselBg();
-  document.getElementById('carousel-image-wrapper').style.background = bg;
-  document.getElementById('carousel-bg-input').value = bg;
+  // Restore saved bg mode
+  const saved = state.metadata?.carouselBgMode?.[getThemeKey()];
+  const mode = saved?.mode || 'dark';
+  const color = saved?.color || '#000000';
+  applyBgMode(document.getElementById('carousel-image-wrapper'), mode, color);
+  const bar = document.getElementById('carousel-bg-bar');
+  for (const btn of bar.querySelectorAll('button')) btn.classList.toggle('active', btn.dataset.bg === mode);
+  document.getElementById('carousel-bg-input').value = color;
   const multi = items.length > 1;
   document.getElementById('carousel-prev').style.display = multi ? '' : 'none';
   document.getElementById('carousel-next').style.display = multi ? '' : 'none';
@@ -1259,17 +1264,8 @@ function setupCarousel() {
     setTimeout(() => { copyPathBtn.innerHTML = orig; }, 1500);
   });
 
-  // Carousel background color picker
-  const bgInput = document.getElementById('carousel-bg-input');
-  bgInput.addEventListener('input', (e) => {
-    wrapper.style.background = e.target.value;
-    // Persist per theme
-    if (state.metadata) {
-      if (!state.metadata.carouselBg) state.metadata.carouselBg = {};
-      state.metadata.carouselBg[getThemeKey()] = e.target.value;
-      scheduleSave();
-    }
-  });
+  // Carousel background mode bar
+  setupBgModeBar('carousel-bg-bar', 'carousel-image-wrapper', 'carousel-bg-input', 'carouselBgMode');
 }
 
 function getThemeKey() {
@@ -1280,6 +1276,81 @@ function getThemeKey() {
 function getCarouselBg() {
   const saved = state.metadata?.carouselBg?.[getThemeKey()];
   return saved || currentTheme.bg;
+}
+
+function applyBgMode(wrapper, mode, customColor) {
+  wrapper.classList.remove('bg-checker');
+  switch (mode) {
+    case 'dark':
+      wrapper.style.background = currentTheme.bg;
+      break;
+    case 'checker':
+      wrapper.style.background = '';
+      wrapper.classList.add('bg-checker');
+      break;
+    case 'white':
+      wrapper.style.background = '#ffffff';
+      break;
+    case 'custom':
+      wrapper.style.background = customColor || '#000000';
+      break;
+  }
+}
+
+function setupBgModeBar(barId, wrapperId, colorInputId, persistKey) {
+  const bar = document.getElementById(barId);
+  const wrapper = document.getElementById(wrapperId);
+  const colorInput = document.getElementById(colorInputId);
+
+  // Restore saved mode
+  const saved = state.metadata?.[persistKey]?.[getThemeKey()];
+  const savedMode = saved?.mode || 'dark';
+  const savedColor = saved?.color || '#000000';
+
+  // Set initial active button
+  for (const btn of bar.querySelectorAll('button')) {
+    btn.classList.toggle('active', btn.dataset.bg === savedMode);
+  }
+  colorInput.value = savedColor;
+  applyBgMode(wrapper, savedMode, savedColor);
+
+  bar.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-bg]');
+    if (!btn) return;
+    const mode = btn.dataset.bg;
+    for (const b of bar.querySelectorAll('button')) b.classList.remove('active');
+    btn.classList.add('active');
+    const color = mode === 'custom' ? colorInput.value : savedColor;
+    applyBgMode(wrapper, mode, color);
+    // Persist
+    if (state.metadata) {
+      if (!state.metadata[persistKey]) state.metadata[persistKey] = {};
+      state.metadata[persistKey][getThemeKey()] = { mode, color: colorInput.value };
+      scheduleSave();
+    }
+  });
+
+  colorInput.addEventListener('input', (e) => {
+    // Auto-switch to custom mode
+    for (const b of bar.querySelectorAll('button')) {
+      b.classList.toggle('active', b.dataset.bg === 'custom');
+    }
+    applyBgMode(wrapper, 'custom', e.target.value);
+    if (state.metadata) {
+      if (!state.metadata[persistKey]) state.metadata[persistKey] = {};
+      state.metadata[persistKey][getThemeKey()] = { mode: 'custom', color: e.target.value };
+      scheduleSave();
+    }
+  });
+
+  return { restore() {
+    const s = state.metadata?.[persistKey]?.[getThemeKey()];
+    const m = s?.mode || 'dark';
+    const c = s?.color || '#000000';
+    for (const btn of bar.querySelectorAll('button')) btn.classList.toggle('active', btn.dataset.bg === m);
+    colorInput.value = c;
+    applyBgMode(wrapper, m, c);
+  }};
 }
 
 // ===== Cell Rendering =====
@@ -2144,6 +2215,7 @@ async function init() {
 
   setupTagAutocomplete();
   setupDetailZoom();
+  setupBgModeBar('detail-bg-bar', 'detail-image-wrapper', 'detail-bg-color', 'detailBgMode');
   setupCarousel();
   setupSettings();
   setupDragSelect();

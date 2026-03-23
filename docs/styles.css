@@ -535,6 +535,40 @@ html, body {
   cursor: zoom-in;
 }
 
+.bg-checker {
+  background: repeating-conic-gradient(#808080 0% 25%, #c0c0c0 0% 50%) 50% / 16px 16px !important;
+}
+
+.bg-mode-bar {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.bg-mode-bar button {
+  padding: 2px 6px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.bg-mode-bar button.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.bg-mode-bar .color-input {
+  width: 20px;
+  height: 20px;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
 #detail-image-wrapper.panning { cursor: grabbing; }
 #detail-image-wrapper.zoomed-in { cursor: grab; }
 

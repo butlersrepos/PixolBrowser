@@ -114,6 +114,13 @@
         <div class="detail-empty-hint">Cmd+Click to multi-select</div>
       </div>
       <div id="detail-content" class="hidden">
+        <div id="detail-bg-bar" class="bg-mode-bar">
+          <button data-bg="dark" class="active" title="Dark background">Dark</button>
+          <button data-bg="checker" title="Checkerboard background">&#9638;</button>
+          <button data-bg="white" title="White background">White</button>
+          <button data-bg="custom" title="Custom color">Custom</button>
+          <input type="color" id="detail-bg-color" class="color-input" value="#000000" />
+        </div>
         <div id="detail-image-wrapper">
           <img id="detail-image" />
           <button id="btn-reset-view" title="Reset zoom &amp; position">&#8982;</button>
@@ -149,9 +156,13 @@
         <div class="carousel-titlebar-spacer"></div>
         <button id="carousel-copy-file" class="carousel-titlebar-btn carousel-text-btn" title="Copy file to clipboard">&#128203; Copy File</button>
         <button id="carousel-copy-path" class="carousel-titlebar-btn carousel-text-btn" title="Copy file path">&#128194; Copy Path</button>
-        <label class="carousel-bg-picker" title="Background color">
-          <input type="color" id="carousel-bg-input" class="color-input" />
-        </label>
+        <div id="carousel-bg-bar" class="bg-mode-bar">
+          <button data-bg="dark" class="active" title="Dark background">Dark</button>
+          <button data-bg="checker" title="Checkerboard">&#9638;</button>
+          <button data-bg="white" title="White">White</button>
+          <button data-bg="custom" title="Custom">Custom</button>
+          <input type="color" id="carousel-bg-input" class="color-input" value="#000000" />
+        </div>
         <button id="carousel-reset" class="carousel-titlebar-btn" title="Reset zoom">&#8982;</button>
         <button id="carousel-close" class="carousel-titlebar-btn" title="Close (Esc)">&times;</button>
       </div>
