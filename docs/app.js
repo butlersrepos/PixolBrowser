@@ -2388,6 +2388,33 @@ function showOpenModal() {
     document.getElementById('open-confirm-btn').disabled = true;
     document.getElementById('open-preview').classList.add('hidden');
   }
+  renderRecentDirs();
+}
+
+function renderRecentDirs() {
+  const container = document.getElementById('recent-dirs');
+  const list = document.getElementById('recent-dirs-list');
+  const dirs = state.metadata.recentDirectories || [];
+  if (dirs.length === 0) {
+    container.classList.add('hidden');
+    return;
+  }
+  container.classList.remove('hidden');
+  list.innerHTML = '';
+  for (const dir of dirs) {
+    const item = document.createElement('div');
+    item.className = 'recent-dir-item';
+    item.textContent = dir;
+    item.title = dir;
+    item.addEventListener('click', () => {
+      openModalState.path = dir;
+      document.getElementById('open-path-display').textContent = dir;
+      document.getElementById('open-path-display').classList.add('has-path');
+      document.getElementById('open-confirm-btn').disabled = false;
+      runOpenCount();
+    });
+    list.appendChild(item);
+  }
 }
 
 function hideOpenModal() {
@@ -2477,6 +2504,9 @@ async function scanDirectory(dirPath, recursive) {
     // Update metadata
     state.metadata.lastDirectory = dirPath;
     state.metadata.lastRecursive = recursive;
+    // Track recent directories (most recent first, max 10, deduplicated)
+    if (!state.metadata.recentDirectories) state.metadata.recentDirectories = [];
+    state.metadata.recentDirectories = [dirPath, ...state.metadata.recentDirectories.filter(d => d !== dirPath)].slice(0, 10);
     scheduleSave();
 
     // Activate "All" filter

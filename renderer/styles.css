@@ -94,6 +94,35 @@ html, body {
 
 .open-preview.hidden { display: none; }
 
+/* Recent Directories */
+.recent-dirs { margin-top: 12px; }
+.recent-dirs.hidden { display: none; }
+.recent-dirs-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.recent-dir-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+.recent-dir-item:hover { background: var(--card); }
+
 .spinner-small {
   width: 16px;
   height: 16px;
