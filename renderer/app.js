@@ -991,6 +991,137 @@ function scheduleSave() {
   }, 500);
 }
 
+// ===== Quick-Open (Cmd+P) =====
+function fuzzyMatch(query, str) {
+  const q = query.toLowerCase();
+  const s = str.toLowerCase();
+  let qi = 0;
+  let score = 0;
+  let lastMatchIdx = -1;
+  for (let si = 0; si < s.length && qi < q.length; si++) {
+    if (s[si] === q[qi]) {
+      score += (si === lastMatchIdx + 1) ? 2 : 1; // bonus for consecutive
+      lastMatchIdx = si;
+      qi++;
+    }
+  }
+  return qi === q.length ? score : 0;
+}
+
+function showQuickOpen() {
+  if (!state.allImages.length) return;
+  const overlay = document.getElementById('quick-open');
+  const input = document.getElementById('quick-open-input');
+  overlay.classList.remove('hidden');
+  input.value = '';
+  input.focus();
+  renderQuickOpenResults('');
+}
+
+function hideQuickOpen() {
+  document.getElementById('quick-open').classList.add('hidden');
+}
+
+let quickOpenSelectedIdx = 0;
+
+function renderQuickOpenResults(query) {
+  const container = document.getElementById('quick-open-results');
+  container.innerHTML = '';
+  quickOpenSelectedIdx = 0;
+
+  let results;
+  if (!query) {
+    results = state.filteredImages.slice(0, 50).map(p => ({ path: p, score: 0 }));
+  } else {
+    results = [];
+    for (const p of state.allImages) {
+      const name = basename(p);
+      const score = fuzzyMatch(query, name);
+      if (score > 0) results.push({ path: p, score });
+    }
+    results.sort((a, b) => b.score - a.score);
+    results = results.slice(0, 50);
+  }
+
+  for (let i = 0; i < results.length; i++) {
+    const { path: imgPath } = results[i];
+    const item = document.createElement('div');
+    item.className = 'quick-open-item' + (i === 0 ? ' selected' : '');
+    item.dataset.idx = i;
+    const thumb = document.createElement('img');
+    thumb.className = 'quick-open-thumb';
+    thumb.src = toFileUrl(imgPath);
+    thumb.loading = 'lazy';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'quick-open-name';
+    nameEl.textContent = basename(imgPath);
+    const pathEl = document.createElement('span');
+    pathEl.className = 'quick-open-path';
+    pathEl.textContent = relativePath(imgPath);
+    item.appendChild(thumb);
+    item.appendChild(nameEl);
+    item.appendChild(pathEl);
+    item.dataset.imgpath = imgPath;
+    item.addEventListener('click', () => selectQuickOpenResult(imgPath));
+    item.addEventListener('mouseenter', () => {
+      container.querySelectorAll('.quick-open-item').forEach(el => el.classList.remove('selected'));
+      item.classList.add('selected');
+      quickOpenSelectedIdx = i;
+    });
+    container.appendChild(item);
+  }
+}
+
+function selectQuickOpenResult(imgPath) {
+  hideQuickOpen();
+  const idx = state.filteredImages.indexOf(imgPath);
+  if (idx >= 0) {
+    state.selectedImages.clear();
+    state.selectedImages.add(imgPath);
+    state.lastClickedIndex = idx;
+    keyNavCursor = idx;
+    grid.scrollToIndex(idx);
+    syncSelectionClasses();
+    updateDetailPanel();
+  }
+}
+
+function setupQuickOpen() {
+  const overlay = document.getElementById('quick-open');
+  const input = document.getElementById('quick-open-input');
+
+  overlay.querySelector('.quick-open-backdrop').addEventListener('click', hideQuickOpen);
+
+  let debounce = null;
+  input.addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => renderQuickOpenResults(input.value.trim()), 80);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    const items = document.querySelectorAll('.quick-open-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      quickOpenSelectedIdx = Math.min(quickOpenSelectedIdx + 1, items.length - 1);
+      items.forEach((el, i) => el.classList.toggle('selected', i === quickOpenSelectedIdx));
+      items[quickOpenSelectedIdx]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      quickOpenSelectedIdx = Math.max(quickOpenSelectedIdx - 1, 0);
+      items.forEach((el, i) => el.classList.toggle('selected', i === quickOpenSelectedIdx));
+      items[quickOpenSelectedIdx]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const selected = items[quickOpenSelectedIdx];
+      if (selected?.dataset.imgpath) {
+        selectQuickOpenResult(selected.dataset.imgpath);
+      }
+    } else if (e.key === 'Escape') {
+      hideQuickOpen();
+    }
+  });
+}
+
 // ===== Recent Images =====
 function trackRecentImage(imagePath) {
   if (!state.metadata) return;
@@ -2316,6 +2447,7 @@ async function init() {
   setupDimFilter();
   setupSort();
   setupRecentImages();
+  setupQuickOpen();
 
   // Apply saved theme
   if (state.metadata.theme) {
@@ -2352,6 +2484,11 @@ async function init() {
   document.addEventListener('keydown', (e) => {
     const inInput = document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
 
+    // Quick-open takes highest priority
+    if (!document.getElementById('quick-open').classList.contains('hidden')) {
+      return; // Quick-open input handles its own keys
+    }
+
     // Carousel keys take priority when active
     if (carousel.active) {
       if (e.key === 'Escape') { closeCarousel(); e.preventDefault(); return; }
@@ -2377,6 +2514,13 @@ async function init() {
       e.preventDefault();
       const items = [...state.selectedImages];
       openCarousel(items, 0);
+    }
+
+    // Cmd/Ctrl+P: quick-open
+    if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
+      e.preventDefault();
+      showQuickOpen();
+      return;
     }
 
     // Cmd/Ctrl+A: select all images in gallery
