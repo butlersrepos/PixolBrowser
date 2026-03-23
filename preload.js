@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('api', {
   saveMetadata: (metadata) => ipcRenderer.invoke('save-metadata', metadata),
   copyFileToClipboard: (filePath) => ipcRenderer.invoke('copy-file-to-clipboard', filePath),
   showItemInFolder: (filePath) => ipcRenderer.invoke('show-item-in-folder', filePath),
+  saveFileDialog: (defaultName, buffer) => ipcRenderer.invoke('save-file-dialog', defaultName, buffer),
   getAllDimensions: (filePaths) => ipcRenderer.invoke('get-all-dimensions', filePaths),
   findSidecars: (dirPath) => ipcRenderer.invoke('find-sidecars', dirPath),
   readSidecar: (filePath) => ipcRenderer.invoke('read-sidecar', filePath),

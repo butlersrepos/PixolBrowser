@@ -1522,6 +1522,7 @@ function spriteIsolateFrame(frameIdx) {
   spriteGrid.isolated = true;
   spriteGrid.isolatedFrame = frameIdx;
   if (spriteGrid.playing) spriteAnimStop();
+  document.getElementById('sprite-export-frame').style.display = '';
 
   const frameW = img.naturalWidth / cols;
   const frameH = img.naturalHeight / rows;
@@ -1561,9 +1562,65 @@ function spriteIsolateFrame(frameIdx) {
 function spriteExitIsolation() {
   spriteGrid.isolated = false;
   document.getElementById('carousel-image').style.visibility = '';
+  document.getElementById('sprite-export-frame').style.display = 'none';
   const backBtn = document.getElementById('sprite-back-btn');
   if (backBtn) backBtn.style.display = 'none';
   drawGridOverlay();
+}
+
+function spriteExportFrame() {
+  const img = document.getElementById('carousel-image');
+  if (!img.naturalWidth || !spriteGrid.isolated) return;
+
+  const cols = spriteGrid.cols;
+  const rows = spriteGrid.rows;
+  const frameW = img.naturalWidth / cols;
+  const frameH = img.naturalHeight / rows;
+  const col = spriteGrid.isolatedFrame % cols;
+  const row = Math.floor(spriteGrid.isolatedFrame / cols);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = frameW;
+  canvas.height = frameH;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, col * frameW, row * frameH, frameW, frameH, 0, 0, frameW, frameH);
+
+  const originalName = basename(carousel.items[carousel.currentIndex]);
+  const nameNoExt = originalName.replace(/\.[^.]+$/, '');
+  const defaultName = `${nameNoExt}_frame_${String(spriteGrid.isolatedFrame + 1).padStart(2, '0')}.png`;
+
+  canvas.toBlob(async (blob) => {
+    if (!blob) return;
+    const btn = document.getElementById('sprite-export-frame');
+
+    if (window.api.saveFileDialog) {
+      // Electron: save to file via dialog
+      const buffer = await blob.arrayBuffer();
+      const result = await window.api.saveFileDialog(defaultName, new Uint8Array(buffer));
+      if (result) {
+        btn.textContent = 'Saved!';
+        setTimeout(() => { btn.textContent = 'Export Frame'; }, 1500);
+      }
+    } else {
+      // Web: copy to clipboard
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Export Frame'; }, 1500);
+      } catch {
+        // Fallback: download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = defaultName;
+        a.click();
+        URL.revokeObjectURL(url);
+        btn.textContent = 'Downloaded!';
+        setTimeout(() => { btn.textContent = 'Export Frame'; }, 1500);
+      }
+    }
+  }, 'image/png');
 }
 
 function spriteIsolateNav(delta) {
@@ -1683,6 +1740,9 @@ function setupSpriteGrid() {
   fpsSlider.addEventListener('input', () => {
     fpsVal.textContent = fpsSlider.value;
   });
+
+  // Export frame button
+  document.getElementById('sprite-export-frame').addEventListener('click', spriteExportFrame);
 }
 
 function setupCarousel() {

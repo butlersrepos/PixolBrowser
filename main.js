@@ -250,6 +250,22 @@ ipcMain.handle('get-relative-path', (_event, filePath, basePath) => {
   return path.relative(basePath, filePath);
 });
 
+// Save buffer to file via save dialog
+ipcMain.handle('save-file-dialog', async (_event, defaultName, buffer) => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    defaultPath: defaultName,
+    filters: [{ name: 'PNG Image', extensions: ['png'] }],
+  });
+  if (result.canceled) return false;
+  try {
+    await fs.writeFile(result.filePath, Buffer.from(buffer));
+    return result.filePath;
+  } catch (e) {
+    console.error('Failed to save file:', e);
+    return false;
+  }
+});
+
 // Show file in OS file manager
 ipcMain.handle('show-item-in-folder', (_event, filePath) => {
   shell.showItemInFolder(filePath);
