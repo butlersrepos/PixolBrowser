@@ -1275,6 +1275,8 @@ function openCarousel(items, startIndex) {
 function closeCarousel() {
   carousel.active = false;
   carousel.viewStates.clear();
+  if (spriteGrid.playing) spriteAnimStop();
+  document.getElementById('carousel-image').style.visibility = '';
   document.getElementById('carousel').classList.add('hidden');
   // Reset sprite grid UI
   spriteGrid.enabled = false;
@@ -1311,11 +1313,14 @@ function loadCarouselImage() {
       document.getElementById('sprite-cols').value = 1;
       document.getElementById('sprite-rows').value = 1;
     }
+    document.getElementById('sprite-play').disabled = (spriteGrid.cols * spriteGrid.rows <= 1);
   }
 }
 
 function carouselNav(delta) {
   if (carousel.items.length <= 1) return;
+  if (spriteGrid.playing) spriteAnimStop();
+  document.getElementById('carousel-image').style.visibility = '';
   saveCarouselView();
   carousel.currentIndex = (carousel.currentIndex + delta + carousel.items.length) % carousel.items.length;
   loadCarouselImage();
@@ -1326,6 +1331,10 @@ const spriteGrid = {
   enabled: false,
   cols: 1,
   rows: 1,
+  // Animation state
+  playing: false,
+  currentFrame: 0,
+  animTimer: null,
 };
 
 function getSpriteConfig(imagePath) {
@@ -1409,6 +1418,92 @@ function drawGridOverlay() {
   document.getElementById('sprite-frame-info').textContent = `${totalFrames} frames (${Math.round(frameW)}x${Math.round(frameH)} each)`;
 }
 
+function spriteAnimStart() {
+  if (spriteGrid.playing) return;
+  const totalFrames = spriteGrid.cols * spriteGrid.rows;
+  if (totalFrames <= 1) return;
+  spriteGrid.playing = true;
+  spriteGrid.currentFrame = 0;
+  const playBtn = document.getElementById('sprite-play');
+  playBtn.innerHTML = '&#9646;&#9646; Pause';
+  spriteAnimShowFrame();
+  spriteAnimSchedule();
+}
+
+function spriteAnimStop() {
+  spriteGrid.playing = false;
+  clearTimeout(spriteGrid.animTimer);
+  spriteGrid.animTimer = null;
+  const playBtn = document.getElementById('sprite-play');
+  playBtn.innerHTML = '&#9654; Play';
+  // Restore full image view
+  const img = document.getElementById('carousel-image');
+  const wrapper = document.getElementById('carousel-image-wrapper');
+  const canvas = document.getElementById('carousel-grid-overlay');
+  img.style.objectFit = '';
+  img.style.objectPosition = '';
+  img.style.clip = '';
+  img.style.clipPath = '';
+  // Redraw full grid
+  drawGridOverlay();
+}
+
+function spriteAnimSchedule() {
+  if (!spriteGrid.playing) return;
+  const fps = parseInt(document.getElementById('sprite-fps').value) || 12;
+  spriteGrid.animTimer = setTimeout(() => {
+    const totalFrames = spriteGrid.cols * spriteGrid.rows;
+    spriteGrid.currentFrame++;
+    if (spriteGrid.currentFrame >= totalFrames) {
+      if (document.getElementById('sprite-loop').checked) {
+        spriteGrid.currentFrame = 0;
+      } else {
+        spriteAnimStop();
+        return;
+      }
+    }
+    spriteAnimShowFrame();
+    spriteAnimSchedule();
+  }, 1000 / fps);
+}
+
+function spriteAnimShowFrame() {
+  const img = document.getElementById('carousel-image');
+  const canvas = document.getElementById('carousel-grid-overlay');
+  const wrapper = document.getElementById('carousel-image-wrapper');
+  if (!img.naturalWidth) return;
+
+  const cols = spriteGrid.cols;
+  const rows = spriteGrid.rows;
+  const frameW = img.naturalWidth / cols;
+  const frameH = img.naturalHeight / rows;
+  const col = spriteGrid.currentFrame % cols;
+  const row = Math.floor(spriteGrid.currentFrame / cols);
+
+  // Use canvas to render just this frame
+  canvas.width = wrapper.clientWidth;
+  canvas.height = wrapper.clientHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Scale frame to fit wrapper, centered
+  const scale = Math.min(canvas.width / frameW, canvas.height / frameH);
+  const dw = frameW * scale;
+  const dh = frameH * scale;
+  const dx = (canvas.width - dw) / 2;
+  const dy = (canvas.height - dh) / 2;
+
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, col * frameW, row * frameH, frameW, frameH, dx, dy, dw, dh);
+
+  // Hide the original image during animation
+  img.style.visibility = 'hidden';
+
+  // Update frame info
+  const totalFrames = cols * rows;
+  document.getElementById('sprite-frame-info').textContent = `Frame ${spriteGrid.currentFrame + 1}/${totalFrames} (${Math.round(frameW)}x${Math.round(frameH)})`;
+}
+
 function setupSpriteGrid() {
   const toggleBtn = document.getElementById('carousel-sprite-toggle');
   const bar = document.getElementById('carousel-sprite-bar');
@@ -1435,11 +1530,14 @@ function setupSpriteGrid() {
   });
 
   function applyGrid() {
+    if (spriteGrid.playing) spriteAnimStop();
+    document.getElementById('carousel-image').style.visibility = '';
     spriteGrid.cols = Math.max(1, parseInt(colsInput.value) || 1);
     spriteGrid.rows = Math.max(1, parseInt(rowsInput.value) || 1);
     colsInput.value = spriteGrid.cols;
     rowsInput.value = spriteGrid.rows;
     saveSpriteConfig(carousel.items[carousel.currentIndex], spriteGrid.cols, spriteGrid.rows);
+    document.getElementById('sprite-play').disabled = (spriteGrid.cols * spriteGrid.rows <= 1);
     drawGridOverlay();
   }
 
@@ -1448,12 +1546,33 @@ function setupSpriteGrid() {
   rowsInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyGrid(); });
 
   clearBtn.addEventListener('click', () => {
+    if (spriteGrid.playing) spriteAnimStop();
     spriteGrid.cols = 1;
     spriteGrid.rows = 1;
     colsInput.value = 1;
     rowsInput.value = 1;
     clearSpriteConfig(carousel.items[carousel.currentIndex]);
+    document.getElementById('sprite-play').disabled = true;
     drawGridOverlay();
+  });
+
+  // Animation controls
+  const playBtn = document.getElementById('sprite-play');
+  const fpsSlider = document.getElementById('sprite-fps');
+  const fpsVal = document.getElementById('sprite-fps-val');
+
+  playBtn.addEventListener('click', () => {
+    if (spriteGrid.playing) {
+      spriteAnimStop();
+      // Restore original image visibility
+      document.getElementById('carousel-image').style.visibility = '';
+    } else {
+      spriteAnimStart();
+    }
+  });
+
+  fpsSlider.addEventListener('input', () => {
+    fpsVal.textContent = fpsSlider.value;
   });
 }
 

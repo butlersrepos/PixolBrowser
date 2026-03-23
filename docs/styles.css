@@ -1136,6 +1136,19 @@ html, body {
 }
 .sprite-bar-field input::-webkit-inner-spin-button { -webkit-appearance: none; }
 .sprite-bar-field input:focus { border-color: var(--accent); }
+.sprite-bar-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 4px;
+}
+.sprite-bar-field input[type="range"] {
+  width: 60px;
+  accent-color: var(--accent);
+}
+.sprite-bar-field input[type="checkbox"] {
+  accent-color: var(--accent);
+}
 .sprite-bar-spacer { flex: 1; }
 .sprite-frame-info {
   font-size: 11px;
