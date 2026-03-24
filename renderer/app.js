@@ -1616,8 +1616,12 @@ function setupRegionSelect() {
     } else {
       regionSelect.region = null;
       clearBtn.style.display = 'none';
+      document.getElementById('region-tile-preview').style.display = 'none';
+      document.getElementById('region-export').style.display = 'none';
       document.getElementById('region-info').textContent = 'Drag to select a region';
     }
+    // Refit image to account for bar height change
+    setTimeout(() => { if (carousel.refit) carousel.refit(); }, 0);
   });
 
   clearBtn.addEventListener('click', () => {
@@ -2206,7 +2210,8 @@ function setupSpriteGrid() {
       }
       applyGrid();
     }
-    drawGridOverlay();
+    // Refit image to account for bar height change
+    setTimeout(() => { if (carousel.refit) carousel.refit(); }, 0);
   });
 
   function applyGrid() {
@@ -2492,6 +2497,14 @@ function setupCarousel() {
 
   // Carousel background mode bar
   setupBgModeBar('carousel-bg-bar', 'carousel-image-wrapper', 'carousel-bg-input', 'carouselBgMode');
+
+  // Expose refit for when bars change the wrapper size
+  carousel.refit = () => {
+    if (!img.naturalWidth) return;
+    computeBase();
+    centerImage();
+    applyTransform();
+  };
 }
 
 function getThemeKey() {
