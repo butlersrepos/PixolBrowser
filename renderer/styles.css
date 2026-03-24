@@ -1230,6 +1230,10 @@ html, body {
 .sprite-bar-field input[type="checkbox"] {
   accent-color: var(--accent);
 }
+.sprite-bar-field input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .sprite-bar-spacer { flex: 1; }
 .sprite-frame-info {
   font-size: 11px;
