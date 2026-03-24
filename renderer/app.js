@@ -817,7 +817,7 @@ function updateDetailPanel() {
     imageWrapper.style.display = '';
     copyBtn.style.display = '';
     copyPathBtn.style.display = '';
-    revealBtn.style.display = '';
+    revealBtn.style.display = window.api.showItemInFolder ? '' : 'none';
     img.src = toFileUrl(imagePath);
 
     filenameEl.textContent = basename(imagePath);
@@ -2419,18 +2419,19 @@ function setupCarousel() {
     setTimeout(() => { copyPathBtn.innerHTML = orig; }, 1500);
   });
 
-  // Reveal in Finder from carousel
+  // Open Folder from carousel (Electron only)
   const revealBtn = document.getElementById('carousel-reveal');
-  revealBtn.addEventListener('click', () => {
+  if (!window.api.showItemInFolder) {
+    revealBtn.style.display = 'none';
+  }
+  revealBtn.addEventListener('click', async () => {
     const filePath = carousel.items[carousel.currentIndex];
     if (window.api.showItemInFolder) {
-      window.api.showItemInFolder(filePath);
-    } else {
-      const rel = relativePath(filePath);
-      navigator.clipboard.writeText(rel);
-      const orig = revealBtn.innerHTML;
-      revealBtn.textContent = 'Path copied!';
-      setTimeout(() => { revealBtn.innerHTML = orig; }, 1500);
+      try {
+        await window.api.showItemInFolder(filePath);
+      } catch (err) {
+        console.error('showItemInFolder failed:', err);
+      }
     }
   });
 
@@ -3382,19 +3383,17 @@ async function init() {
     }
   });
 
-  document.getElementById('btn-reveal').addEventListener('click', () => {
-    if (state.selectedImages.size === 1) {
+  // Hide Open Folder button in web version (redundant with Copy Path)
+  if (!window.api.showItemInFolder) {
+    document.getElementById('btn-reveal').style.display = 'none';
+  }
+  document.getElementById('btn-reveal').addEventListener('click', async () => {
+    if (state.selectedImages.size === 1 && window.api.showItemInFolder) {
       const filePath = [...state.selectedImages][0];
-      if (window.api.showItemInFolder) {
-        window.api.showItemInFolder(filePath);
-      } else {
-        // Web version: copy the relative path (more useful than blob URL)
-        const rel = relativePath(filePath);
-        navigator.clipboard.writeText(rel);
-        const btn = document.getElementById('btn-reveal');
-        const orig = btn.innerHTML;
-        btn.textContent = 'Path copied!';
-        setTimeout(() => { btn.innerHTML = orig; }, 1500);
+      try {
+        await window.api.showItemInFolder(filePath);
+      } catch (err) {
+        console.error('showItemInFolder failed:', err);
       }
     }
   });
