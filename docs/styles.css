@@ -1804,6 +1804,25 @@ html, body {
   text-align: left;
 }
 
+/* === Fast Tooltips (400ms) === */
+.tooltip-host { position: relative; }
+#custom-tooltip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: var(--surface, #333);
+  color: var(--text, #eee);
+  border: 1px solid var(--border, #555);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+#custom-tooltip.visible { opacity: 1; }
+
 /* === Feedback Link === */
 #feedback-link {
   position: fixed;

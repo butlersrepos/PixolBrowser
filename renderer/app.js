@@ -1207,6 +1207,45 @@ function scheduleSave() {
   }, 500);
 }
 
+// ===== Fast Tooltips (400ms) =====
+function setupFastTooltips() {
+  const tip = document.getElementById('custom-tooltip');
+  let timer = null;
+  let activeEl = null;
+
+  document.addEventListener('mouseover', (e) => {
+    const el = e.target.closest('[title]');
+    if (!el || el === activeEl) return;
+    clearTimeout(timer);
+    tip.classList.remove('visible');
+    activeEl = el;
+    // Steal the title to prevent native tooltip
+    const text = el.getAttribute('title');
+    if (!text) return;
+    el.dataset.tip = text;
+    el.removeAttribute('title');
+    timer = setTimeout(() => {
+      tip.textContent = text;
+      const rect = el.getBoundingClientRect();
+      tip.style.left = rect.left + rect.width / 2 + 'px';
+      tip.style.top = rect.bottom + 6 + 'px';
+      tip.style.transform = 'translateX(-50%)';
+      tip.classList.add('visible');
+    }, 400);
+  });
+
+  document.addEventListener('mouseout', (e) => {
+    const el = e.target.closest('[data-tip]');
+    if (!el) return;
+    clearTimeout(timer);
+    tip.classList.remove('visible');
+    // Restore title for accessibility
+    el.setAttribute('title', el.dataset.tip);
+    delete el.dataset.tip;
+    activeEl = null;
+  });
+}
+
 // ===== Quick-Open (Cmd+P) =====
 function fuzzyMatch(query, str) {
   const q = query.toLowerCase();
@@ -2387,9 +2426,10 @@ function setupCarousel() {
     if (window.api.showItemInFolder) {
       window.api.showItemInFolder(filePath);
     } else {
-      navigator.clipboard.writeText(filePath);
+      const rel = relativePath(filePath);
+      navigator.clipboard.writeText(rel);
       const orig = revealBtn.innerHTML;
-      revealBtn.textContent = 'Copied path!';
+      revealBtn.textContent = 'Path copied!';
       setTimeout(() => { revealBtn.innerHTML = orig; }, 1500);
     }
   });
@@ -3348,11 +3388,13 @@ async function init() {
       if (window.api.showItemInFolder) {
         window.api.showItemInFolder(filePath);
       } else {
-        navigator.clipboard.writeText(filePath);
+        // Web version: copy the relative path (more useful than blob URL)
+        const rel = relativePath(filePath);
+        navigator.clipboard.writeText(rel);
         const btn = document.getElementById('btn-reveal');
         const orig = btn.innerHTML;
-        btn.textContent = '\u2713';
-        setTimeout(() => { btn.innerHTML = orig; }, 1200);
+        btn.textContent = 'Path copied!';
+        setTimeout(() => { btn.innerHTML = orig; }, 1500);
       }
     }
   });
@@ -3387,6 +3429,7 @@ async function init() {
   setupSort();
   setupRecentImages();
   setupQuickOpen();
+  setupFastTooltips();
   document.getElementById('btn-save-view').addEventListener('click', saveCurrentView);
 
   // Apply saved theme
