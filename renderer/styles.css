@@ -1670,6 +1670,57 @@ html, body {
 }
 .search-history-clear:hover { color: var(--text); }
 
+/* === Tiled Preview === */
+.tile-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 350;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tile-preview.hidden { display: none; }
+.tile-preview-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+}
+.tile-preview-panel {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-width: 90vw;
+  max-height: 85vh;
+}
+.tile-preview-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.tile-preview-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+}
+.tile-preview-controls { display: flex; gap: 4px; }
+.tile-preview-controls .btn-sm.active {
+  background: color-mix(in srgb, var(--accent) 20%, var(--card));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+#tile-preview-canvas {
+  image-rendering: pixelated;
+  display: block;
+}
+
 /* === Quick-Open Overlay === */
 .quick-open {
   position: fixed;

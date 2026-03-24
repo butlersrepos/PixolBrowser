@@ -207,6 +207,7 @@
         <span class="sprite-bar-label">Region:</span>
         <span id="region-info" class="sprite-frame-info">Drag to select a region</span>
         <div class="sprite-bar-spacer"></div>
+        <button id="region-tile-preview" class="btn-sm btn-primary" style="display:none">Tile Preview</button>
         <button id="region-clear" class="btn-sm btn-secondary" style="display:none">Clear</button>
       </div>
       <div id="carousel-image-wrapper">
@@ -318,6 +319,23 @@
     <div id="scan-content">
       <div class="spinner"></div>
       <div id="scan-text">Scanning...</div>
+    </div>
+  </div>
+
+  <!-- Tiled Preview Overlay -->
+  <div id="tile-preview" class="tile-preview hidden">
+    <div class="tile-preview-backdrop"></div>
+    <div class="tile-preview-panel">
+      <div class="tile-preview-header">
+        <span class="tile-preview-title">Tile Preview</span>
+        <div class="tile-preview-controls">
+          <button id="tile-grid-3" class="btn-sm btn-secondary active">3x3</button>
+          <button id="tile-grid-5" class="btn-sm btn-secondary">5x5</button>
+          <button id="tile-grid-7" class="btn-sm btn-secondary">7x7</button>
+        </div>
+        <button id="tile-preview-close" class="modal-close">&times;</button>
+      </div>
+      <canvas id="tile-preview-canvas"></canvas>
     </div>
   </div>
 

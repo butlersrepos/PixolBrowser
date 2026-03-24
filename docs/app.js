@@ -1584,6 +1584,7 @@ function setupRegionSelect() {
   clearBtn.addEventListener('click', () => {
     regionSelect.region = null;
     clearBtn.style.display = 'none';
+    document.getElementById('region-tile-preview').style.display = 'none';
     document.getElementById('region-info').textContent = 'Drag to select a region';
     drawRegionOverlay();
   });
@@ -1614,6 +1615,7 @@ function setupRegionSelect() {
     regionSelect.dragging = false;
     if (regionSelect.region && regionSelect.region.w > 0 && regionSelect.region.h > 0) {
       document.getElementById('region-clear').style.display = '';
+      document.getElementById('region-tile-preview').style.display = '';
     }
   });
 
@@ -1693,6 +1695,60 @@ function updateRegionInfo() {
     return;
   }
   document.getElementById('region-info').textContent = `${r.w}x${r.h} at (${r.x}, ${r.y})`;
+}
+
+// ===== Tiled Preview =====
+let tileGridSize = 3;
+
+function showTilePreview() {
+  if (!regionSelect.region || regionSelect.region.w <= 0 || regionSelect.region.h <= 0) return;
+  document.getElementById('tile-preview').classList.remove('hidden');
+  renderTilePreview();
+}
+
+function hideTilePreview() {
+  document.getElementById('tile-preview').classList.add('hidden');
+}
+
+function renderTilePreview() {
+  const canvas = document.getElementById('tile-preview-canvas');
+  const img = document.getElementById('carousel-image');
+  const r = regionSelect.region;
+  if (!img.naturalWidth || !r) return;
+
+  const n = tileGridSize;
+  // Scale so tile preview fits in viewport nicely
+  const maxDim = Math.min(window.innerWidth * 0.8, window.innerHeight * 0.75);
+  const tileScale = Math.min(maxDim / (r.w * n), maxDim / (r.h * n));
+  const scale = Math.max(1, Math.floor(tileScale)); // integer scale for crisp pixels
+
+  canvas.width = r.w * n * scale;
+  canvas.height = r.h * n * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  for (let row = 0; row < n; row++) {
+    for (let col = 0; col < n; col++) {
+      ctx.drawImage(img, r.x, r.y, r.w, r.h,
+        col * r.w * scale, row * r.h * scale, r.w * scale, r.h * scale);
+    }
+  }
+}
+
+function setupTilePreview() {
+  document.getElementById('region-tile-preview').addEventListener('click', showTilePreview);
+  document.getElementById('tile-preview-close').addEventListener('click', hideTilePreview);
+  document.getElementById('tile-preview').querySelector('.tile-preview-backdrop').addEventListener('click', hideTilePreview);
+
+  const buttons = { 'tile-grid-3': 3, 'tile-grid-5': 5, 'tile-grid-7': 7 };
+  for (const [id, size] of Object.entries(buttons)) {
+    document.getElementById(id).addEventListener('click', () => {
+      tileGridSize = size;
+      document.querySelectorAll('.tile-preview-controls .btn-sm').forEach(b => b.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+      renderTilePreview();
+    });
+  }
 }
 
 // ===== Sprite Grid =====
@@ -3273,6 +3329,7 @@ async function init() {
   setupCarousel();
   setupSpriteGrid();
   setupRegionSelect();
+  setupTilePreview();
   setupSettings();
   setupDragSelect();
   setupDimFilter();
