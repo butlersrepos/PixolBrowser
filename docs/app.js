@@ -269,6 +269,52 @@ function getVisibleImages() {
   return cachedVisibleImages;
 }
 
+// ===== Search History =====
+function addSearchHistory(query) {
+  if (!query.trim() || !state.metadata) return;
+  if (!state.metadata.searchHistory) state.metadata.searchHistory = [];
+  state.metadata.searchHistory = [query.trim(), ...state.metadata.searchHistory.filter(q => q !== query.trim())].slice(0, 15);
+  scheduleSave();
+}
+
+function showSearchHistory() {
+  const history = state.metadata?.searchHistory || [];
+  const container = document.getElementById('search-history');
+  if (history.length === 0) { container.classList.add('hidden'); return; }
+  container.classList.remove('hidden');
+  container.innerHTML = '';
+  for (const q of history) {
+    const item = document.createElement('div');
+    item.className = 'search-history-item';
+    const text = document.createElement('span');
+    text.className = 'search-hist-text';
+    text.textContent = q;
+    item.appendChild(text);
+    item.addEventListener('click', () => {
+      const input = document.getElementById('search-input');
+      input.value = q;
+      state.searchQuery = q;
+      document.getElementById('btn-search-clear').classList.remove('hidden');
+      container.classList.add('hidden');
+      updateGrid();
+    });
+    container.appendChild(item);
+  }
+  const clearRow = document.createElement('div');
+  clearRow.className = 'search-history-clear';
+  clearRow.textContent = 'Clear History';
+  clearRow.addEventListener('click', () => {
+    state.metadata.searchHistory = [];
+    scheduleSave();
+    container.classList.add('hidden');
+  });
+  container.appendChild(clearRow);
+}
+
+function hideSearchHistory() {
+  document.getElementById('search-history').classList.add('hidden');
+}
+
 // ===== Omni Search Parser =====
 // Parse search query for prefix modifiers: t:tag, s:size, d:date, f:format
 const DIM_PRESETS = {
@@ -2881,11 +2927,27 @@ async function init() {
   const searchClear = document.getElementById('btn-search-clear');
   searchInput.addEventListener('input', (e) => {
     searchClear.classList.toggle('hidden', !e.target.value);
+    hideSearchHistory();
     clearTimeout(searchDebounce);
     searchDebounce = setTimeout(() => {
       state.searchQuery = e.target.value;
+      if (e.target.value.trim()) addSearchHistory(e.target.value.trim());
       updateGrid();
     }, 150);
+  });
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' && !searchInput.value) {
+      e.preventDefault();
+      showSearchHistory();
+    } else if (e.key === 'Escape') {
+      hideSearchHistory();
+    }
+  });
+  searchInput.addEventListener('focus', () => {
+    if (!searchInput.value) showSearchHistory();
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#search-wrapper')) hideSearchHistory();
   });
   searchClear.addEventListener('click', () => {
     searchInput.value = '';

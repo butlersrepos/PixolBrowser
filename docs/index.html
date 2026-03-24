@@ -12,8 +12,9 @@
     <button id="btn-open" title="Choose Directory">Open Folder</button>
     <div id="toolbar-spacer"></div>
     <div id="search-wrapper">
-      <input type="text" id="search-input" placeholder="Search... t:tag s:size f:type d:date" />
+      <input type="text" id="search-input" placeholder="Search... t:tag s:size f:type d:date" autocomplete="off" />
       <button id="btn-search-clear" class="search-clear hidden" title="Clear search">&times;</button>
+      <div id="search-history" class="search-history hidden"></div>
     </div>
     <div class="toolbar-divider"></div>
     <button id="btn-rules" title="Manage auto-tag rules and exclusions">Rules</button>

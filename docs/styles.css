@@ -1551,6 +1551,49 @@ html, body {
   flex-wrap: wrap;
 }
 
+/* === Search History Dropdown === */
+.search-bar { position: relative; }
+.search-history {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 50;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.search-history.hidden { display: none; }
+.search-history-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text);
+}
+.search-history-item:hover { background: var(--card); }
+.search-history-item .search-hist-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: monospace;
+}
+.search-history-clear {
+  padding: 4px 10px;
+  font-size: 10px;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: center;
+  border-top: 1px solid var(--border);
+}
+.search-history-clear:hover { color: var(--text); }
+
 /* === Quick-Open Overlay === */
 .quick-open {
   position: fixed;
