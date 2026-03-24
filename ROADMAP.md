@@ -61,13 +61,13 @@ Highest excitement features. Sequential dependencies within batch.
 
 High daily-use value for short-burst sessions.
 
-- [ ] **10. Omni Search with Prefix Modifiers** — Datadog-style syntax in existing search bar. Default: path match. `t:tagname` tag filter, `s:small` or `s:32-64` dimensions, `d:recent` date, `f:png` file type. Combine freely: `knight t:character s:small`. Autocomplete after prefixes.
+- [x] **10. Omni Search with Prefix Modifiers** — Datadog-style syntax in existing search bar. Default: path match. `t:tagname` tag filter, `s:small` or `s:32-64` dimensions, `d:recent` date, `f:png` file type. Combine freely: `knight t:character s:small`. Autocomplete after prefixes.
   - Touches: `renderer/app.js`
 
-- [ ] **11. Search History** — Last 15 queries. Arrow-down in empty bar shows history dropdown. Click to restore. Clear option.
+- [x] **11. Search History** — Last 15 queries. Arrow-down in empty bar shows history dropdown. Click to restore. Clear option.
   - Touches: `renderer/app.js`, metadata
 
-- [ ] **12. Saved Searches** — "Save Current View" captures full filter state (query + tag + dimension + sort). Named saved searches in sidebar. One click restores. Edit/delete.
+- [x] **12. Saved Searches** — "Save Current View" captures full filter state (query + tag + dimension + sort). Named saved searches in sidebar. One click restores. Edit/delete.
   - Touches: `renderer/app.js`, metadata
 
 ---
@@ -76,14 +76,14 @@ High daily-use value for short-burst sessions.
 
 Innovative differentiator. Sequential dependencies.
 
-- [ ] **13. Region Select Tool** — "Select Region" mode in carousel. Drag rectangle, snaps to pixel boundaries. Shows dimensions. Resize handles. Store per image in metadata.
+- [x] **13. Region Select Tool** — "Select Region" mode in carousel. Drag rectangle, snaps to pixel boundaries. Shows dimensions. Resize handles. Store per image in metadata.
   - Touches: `renderer/app.js`
 
-- [ ] **14. Tiled Preview Panel** — After selecting region, "Tile Preview" button. Side panel repeats region in configurable NxN grid (3x3, 5x5). Reveals seams and tile connections.
+- [x] **14. Tiled Preview Panel** — After selecting region, "Tile Preview" button. Side panel repeats region in configurable NxN grid (3x3, 5x5). Reveals seams and tile connections.
   - Depends on: #13
   - Touches: `renderer/app.js`
 
-- [ ] **15. Region Copy/Export** — Copy or save selected region as PNG. Full workflow: browse tileset, select tile, preview tiled, export.
+- [x] **15. Region Copy/Export** — Copy or save selected region as PNG. Full workflow: browse tileset, select tile, preview tiled, export.
   - Depends on: #13
   - Touches: `renderer/app.js`
 
