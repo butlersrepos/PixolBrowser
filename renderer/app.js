@@ -269,6 +269,93 @@ function getVisibleImages() {
   return cachedVisibleImages;
 }
 
+// ===== Saved Searches =====
+function saveCurrentView() {
+  const name = prompt('Name this saved view:');
+  if (!name || !name.trim()) return;
+  if (!state.metadata.savedSearches) state.metadata.savedSearches = [];
+  const view = {
+    name: name.trim(),
+    searchQuery: state.searchQuery || '',
+    currentFilter: state.currentFilter || 'all',
+    dimFilter: state.dimFilter ? { ...state.dimFilter } : null,
+    sortBy: state.sortBy,
+    sortDir: state.sortDir,
+  };
+  // Replace if same name exists
+  state.metadata.savedSearches = state.metadata.savedSearches.filter(s => s.name !== view.name);
+  state.metadata.savedSearches.push(view);
+  scheduleSave();
+  renderSavedSearches();
+}
+
+function restoreSavedView(view) {
+  state.searchQuery = view.searchQuery || '';
+  state.currentFilter = view.currentFilter || 'all';
+  state.dimFilter = view.dimFilter || null;
+  state.sortBy = view.sortBy || 'name';
+  state.sortDir = view.sortDir || 'asc';
+
+  // Update UI to match
+  document.getElementById('search-input').value = state.searchQuery;
+  document.getElementById('btn-search-clear').classList.toggle('hidden', !state.searchQuery);
+  activateFilter();
+  updateDimFilterUI();
+
+  // Update sort UI
+  const sortSelect = document.getElementById('sort-select');
+  const sortDirBtn = document.getElementById('sort-dir-btn');
+  if (sortSelect) sortSelect.value = state.sortBy;
+  if (sortDirBtn) sortDirBtn.textContent = state.sortDir === 'asc' ? '\u25B2' : '\u25BC';
+
+  updateGrid();
+  renderSavedSearches();
+}
+
+function deleteSavedSearch(name) {
+  if (!state.metadata.savedSearches) return;
+  state.metadata.savedSearches = state.metadata.savedSearches.filter(s => s.name !== name);
+  scheduleSave();
+  renderSavedSearches();
+}
+
+function renderSavedSearches() {
+  const section = document.getElementById('saved-searches');
+  const list = document.getElementById('saved-searches-list');
+  const searches = state.metadata?.savedSearches || [];
+
+  // Always show section (so + button is accessible), but hide list if empty
+  section.classList.remove('hidden');
+  list.innerHTML = '';
+
+  for (const s of searches) {
+    const item = document.createElement('div');
+    item.className = 'saved-search-item';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'saved-search-name';
+    nameEl.textContent = s.name;
+    nameEl.title = buildSavedSearchTooltip(s);
+    const delBtn = document.createElement('button');
+    delBtn.className = 'saved-search-delete';
+    delBtn.textContent = '\u00d7';
+    delBtn.title = 'Delete saved view';
+    delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteSavedSearch(s.name); });
+    item.appendChild(nameEl);
+    item.appendChild(delBtn);
+    item.addEventListener('click', () => restoreSavedView(s));
+    list.appendChild(item);
+  }
+}
+
+function buildSavedSearchTooltip(s) {
+  const parts = [];
+  if (s.searchQuery) parts.push(`Search: ${s.searchQuery}`);
+  if (s.currentFilter && s.currentFilter !== 'all') parts.push(`Tag: ${s.currentFilter}`);
+  if (s.dimFilter) parts.push(`Size: ${s.dimFilter.min}-${s.dimFilter.max}`);
+  if (s.sortBy !== 'name') parts.push(`Sort: ${s.sortBy}`);
+  return parts.join(' | ') || 'All images';
+}
+
 // ===== Search History =====
 function addSearchHistory(query) {
   if (!query.trim() || !state.metadata) return;
@@ -3039,6 +3126,7 @@ async function init() {
   setupSort();
   setupRecentImages();
   setupQuickOpen();
+  document.getElementById('btn-save-view').addEventListener('click', saveCurrentView);
 
   // Apply saved theme
   if (state.metadata.theme) {
@@ -3352,6 +3440,7 @@ async function scanDirectory(dirPath, recursive) {
     updateGrid();
     updateDimFilterUI();
     renderRecentImages();
+    renderSavedSearches();
 
   } finally {
     overlay.classList.add('hidden');
