@@ -1850,6 +1850,8 @@ const spriteGrid = {
   // Isolation state
   isolated: false,
   isolatedFrame: 0,
+  // Held frame state (animation ended on last frame)
+  heldFrame: false,
 };
 
 function getSpriteConfig(imagePath) {
@@ -1938,6 +1940,7 @@ function spriteAnimStart() {
   const frames = getPlaybackFrames();
   if (frames.length <= 1) return;
   spriteGrid.playing = true;
+  spriteGrid.heldFrame = false;
   spriteGrid.currentFrame = frames[0];
   const playBtn = document.getElementById('sprite-play');
   playBtn.innerHTML = '&#9646;&#9646; Pause';
@@ -1945,22 +1948,17 @@ function spriteAnimStart() {
   spriteAnimSchedule();
 }
 
-function spriteAnimStop() {
+function spriteAnimStop(holdFrame) {
   spriteGrid.playing = false;
   clearTimeout(spriteGrid.animTimer);
   spriteGrid.animTimer = null;
   const playBtn = document.getElementById('sprite-play');
   playBtn.innerHTML = '&#9654; Play';
-  // Restore full image view
-  const img = document.getElementById('carousel-image');
-  const wrapper = document.getElementById('carousel-image-wrapper');
-  const canvas = document.getElementById('carousel-grid-overlay');
-  img.style.objectFit = '';
-  img.style.objectPosition = '';
-  img.style.clip = '';
-  img.style.clipPath = '';
-  // Redraw full grid
-  drawGridOverlay();
+  spriteGrid.heldFrame = !!holdFrame;
+  if (!holdFrame) {
+    document.getElementById('carousel-image').style.visibility = '';
+    drawGridOverlay();
+  }
 }
 
 function getPlaybackFrames() {
@@ -1986,7 +1984,7 @@ function spriteAnimSchedule() {
       if (document.getElementById('sprite-loop').checked) {
         spriteGrid.currentFrame = frames[0];
       } else {
-        spriteAnimStop();
+        spriteAnimStop(true); // hold on last frame
         return;
       }
     } else {
@@ -3520,6 +3518,12 @@ async function init() {
     if (carousel.active) {
       if (e.key === 'Escape') {
         if (spriteGrid.isolated) { spriteExitIsolation(); e.preventDefault(); return; }
+        if (spriteGrid.heldFrame) {
+          spriteGrid.heldFrame = false;
+          document.getElementById('carousel-image').style.visibility = '';
+          drawGridOverlay();
+          e.preventDefault(); return;
+        }
         closeCarousel(); e.preventDefault(); return;
       }
       if (spriteGrid.isolated) {
@@ -3537,6 +3541,7 @@ async function init() {
             spriteAnimStop();
             document.getElementById('carousel-image').style.visibility = '';
           } else {
+            // If held on last frame, image is already hidden — spriteAnimStart handles it
             spriteAnimStart();
           }
           return;
