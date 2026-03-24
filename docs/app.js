@@ -2499,10 +2499,29 @@ function setupCarousel() {
   setupBgModeBar('carousel-bg-bar', 'carousel-image-wrapper', 'carousel-bg-input', 'carouselBgMode');
 
   // Expose refit for when bars change the wrapper size
+  // Preserves the image point currently at viewport center
   carousel.refit = () => {
     if (!img.naturalWidth) return;
-    computeBase();
-    centerImage();
+    const oldBaseW = carousel.baseW;
+    const oldBaseH = carousel.baseH;
+    const wW = wrapper.clientWidth;
+    const wH = wrapper.clientHeight;
+
+    if (carousel.zoom <= 1) {
+      // If not zoomed, just recompute and center
+      computeBase();
+      centerImage();
+    } else {
+      // Find which image pixel is at viewport center
+      const centerImgX = (wW / 2 - carousel.panX) / (oldBaseW * carousel.zoom);
+      const centerImgY = (wH / 2 - carousel.panY) / (oldBaseH * carousel.zoom);
+
+      computeBase();
+
+      // Restore that image pixel to the new viewport center
+      carousel.panX = wW / 2 - centerImgX * carousel.baseW * carousel.zoom;
+      carousel.panY = wH / 2 - centerImgY * carousel.baseH * carousel.zoom;
+    }
     applyTransform();
   };
 }
