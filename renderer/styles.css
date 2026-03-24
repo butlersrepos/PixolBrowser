@@ -1212,9 +1212,20 @@ html, body {
   background: var(--border);
   margin: 0 4px;
 }
-.sprite-bar-field input[type="range"] {
-  width: 60px;
-  accent-color: var(--accent);
+.sprite-row-select {
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+  outline: none;
+  cursor: pointer;
+}
+.sprite-row-select:focus { border-color: var(--accent); }
+.sprite-row-select:disabled { opacity: 0.4; cursor: default; }
+.sprite-bar-field input[type="number"].frame-time-input {
+  width: 52px;
 }
 .sprite-bar-field input[type="checkbox"] {
   accent-color: var(--accent);
@@ -1405,6 +1416,30 @@ html, body {
 
 .settings-section { display: flex; flex-direction: column; gap: 16px; }
 .settings-section.hidden { display: none; }
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  cursor: default;
+}
+.settings-row-label {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text);
+}
+.settings-input-sm {
+  width: 70px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+.settings-input-sm:focus { border-color: var(--accent); }
 
 .settings-group {}
 .settings-group-label {

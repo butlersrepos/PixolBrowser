@@ -1935,10 +1935,10 @@ function drawGridOverlay() {
 
 function spriteAnimStart() {
   if (spriteGrid.playing) return;
-  const totalFrames = spriteGrid.cols * spriteGrid.rows;
-  if (totalFrames <= 1) return;
+  const frames = getPlaybackFrames();
+  if (frames.length <= 1) return;
   spriteGrid.playing = true;
-  spriteGrid.currentFrame = 0;
+  spriteGrid.currentFrame = frames[0];
   const playBtn = document.getElementById('sprite-play');
   playBtn.innerHTML = '&#9646;&#9646; Pause';
   spriteAnimShowFrame();
@@ -1963,23 +1963,38 @@ function spriteAnimStop() {
   drawGridOverlay();
 }
 
+function getPlaybackFrames() {
+  const rowSelect = document.getElementById('sprite-row-select');
+  const rowVal = rowSelect?.value || 'all';
+  const cols = spriteGrid.cols;
+  const rows = spriteGrid.rows;
+  if (rowVal === 'all') {
+    return Array.from({ length: cols * rows }, (_, i) => i);
+  }
+  const row = parseInt(rowVal);
+  return Array.from({ length: cols }, (_, c) => row * cols + c);
+}
+
 function spriteAnimSchedule() {
   if (!spriteGrid.playing) return;
-  const fps = parseInt(document.getElementById('sprite-fps').value) || 12;
+  const ms = parseInt(document.getElementById('sprite-frame-time').value) || 200;
   spriteGrid.animTimer = setTimeout(() => {
-    const totalFrames = spriteGrid.cols * spriteGrid.rows;
-    spriteGrid.currentFrame++;
-    if (spriteGrid.currentFrame >= totalFrames) {
+    const frames = getPlaybackFrames();
+    const curIdx = frames.indexOf(spriteGrid.currentFrame);
+    const nextIdx = curIdx + 1;
+    if (nextIdx >= frames.length) {
       if (document.getElementById('sprite-loop').checked) {
-        spriteGrid.currentFrame = 0;
+        spriteGrid.currentFrame = frames[0];
       } else {
         spriteAnimStop();
         return;
       }
+    } else {
+      spriteGrid.currentFrame = frames[nextIdx];
     }
     spriteAnimShowFrame();
     spriteAnimSchedule();
-  }, 1000 / fps);
+  }, ms);
 }
 
 function spriteAnimShowFrame() {
@@ -2181,6 +2196,18 @@ function setupSpriteGrid() {
     const hasGrid = spriteGrid.cols * spriteGrid.rows > 1;
     document.getElementById('sprite-play').disabled = !hasGrid;
     document.getElementById('carousel-grid-overlay').classList.toggle('interactive', hasGrid);
+    // Populate row selector
+    const rowSelect = document.getElementById('sprite-row-select');
+    rowSelect.disabled = !hasGrid;
+    rowSelect.innerHTML = '<option value="all">All Rows</option>';
+    if (hasGrid && spriteGrid.rows > 1) {
+      for (let r = 0; r < spriteGrid.rows; r++) {
+        const opt = document.createElement('option');
+        opt.value = r;
+        opt.textContent = `Row ${r + 1}`;
+        rowSelect.appendChild(opt);
+      }
+    }
     drawGridOverlay();
   }
 
@@ -2240,21 +2267,19 @@ function setupSpriteGrid() {
 
   // Animation controls
   const playBtn = document.getElementById('sprite-play');
-  const fpsSlider = document.getElementById('sprite-fps');
-  const fpsVal = document.getElementById('sprite-fps-val');
+  const frameTimeInput = document.getElementById('sprite-frame-time');
+
+  // Load default frame time from metadata
+  const defaultFrameTime = state.metadata?.defaultFrameTime || 200;
+  frameTimeInput.value = defaultFrameTime;
 
   playBtn.addEventListener('click', () => {
     if (spriteGrid.playing) {
       spriteAnimStop();
-      // Restore original image visibility
       document.getElementById('carousel-image').style.visibility = '';
     } else {
       spriteAnimStart();
     }
-  });
-
-  fpsSlider.addEventListener('input', () => {
-    fpsVal.textContent = fpsSlider.value;
   });
 
   // Export frame button
@@ -2828,8 +2853,8 @@ function showSettingsModal() {
   document.getElementById('settings-modal').classList.remove('hidden');
   // Reset to theme tab
   document.querySelectorAll('.settings-nav-item').forEach(i => i.classList.toggle('active', i.dataset.section === 'theme'));
+  document.querySelectorAll('.settings-section').forEach(s => s.classList.add('hidden'));
   document.getElementById('settings-theme').classList.remove('hidden');
-  document.getElementById('settings-configs').classList.add('hidden');
   renderSettingsTheme();
 }
 
@@ -3006,7 +3031,20 @@ function setupSettings() {
       const section = item.dataset.section;
       document.getElementById('settings-' + section).classList.remove('hidden');
       if (section === 'configs') renderConfigsUI();
+      if (section === 'general') renderGeneralSettings();
     });
+  });
+
+  // General settings
+  function renderGeneralSettings() {
+    const ftInput = document.getElementById('settings-frame-time');
+    ftInput.value = state.metadata?.defaultFrameTime || 200;
+  }
+  document.getElementById('settings-frame-time').addEventListener('change', (e) => {
+    const val = Math.max(16, Math.min(2000, parseInt(e.target.value) || 200));
+    e.target.value = val;
+    state.metadata.defaultFrameTime = val;
+    scheduleSave();
   });
 
   // Config management

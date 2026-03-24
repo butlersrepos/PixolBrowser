@@ -202,8 +202,11 @@
         <button id="sprite-grid-clear" class="btn-sm btn-secondary">Clear</button>
         <button id="sprite-export-frame" class="btn-sm btn-primary" style="display:none" title="Export isolated frame as PNG">Export Frame</button>
         <div class="sprite-bar-divider"></div>
-        <button id="sprite-play" class="btn-sm btn-secondary" title="Play/Pause animation" disabled>&#9654; Play</button>
-        <label class="sprite-bar-field">FPS <input type="range" id="sprite-fps" min="1" max="30" value="12" /><span id="sprite-fps-val">12</span></label>
+        <button id="sprite-play" class="btn-sm btn-secondary" title="Play/Pause animation (P)" disabled>&#9654; Play</button>
+        <select id="sprite-row-select" class="sprite-row-select" title="Play all rows or a specific row" disabled>
+          <option value="all">All Rows</option>
+        </select>
+        <label class="sprite-bar-field" title="Milliseconds per frame">ms <input type="number" id="sprite-frame-time" min="16" max="2000" value="200" step="10" /></label>
         <label class="sprite-bar-field"><input type="checkbox" id="sprite-loop" checked /> Loop</label>
         <div class="sprite-bar-spacer"></div>
         <span id="sprite-frame-info" class="sprite-frame-info"></span>
@@ -266,6 +269,7 @@
       <div class="settings-layout">
         <div class="settings-nav">
           <div class="settings-nav-item active" data-section="theme">Theme</div>
+          <div class="settings-nav-item" data-section="general">General</div>
           <div class="settings-nav-item" data-section="configs">Rules &amp; Tags</div>
         </div>
         <div class="settings-body">
@@ -290,6 +294,18 @@
             <div class="settings-group" style="margin-top: 12px;">
               <button id="theme-reset-btn" class="btn-secondary btn-sm">Reset to Default</button>
               <button id="theme-copy-btn" class="btn-secondary btn-sm">Copy as JSON</button>
+            </div>
+          </div>
+
+          <!-- General Section -->
+          <div id="settings-general" class="settings-section hidden">
+            <div class="settings-group">
+              <h4 class="settings-group-label">Animation</h4>
+              <label class="settings-row">
+                <span class="settings-row-label">Default frame time (ms)</span>
+                <input type="number" id="settings-frame-time" class="settings-input-sm" min="16" max="2000" step="10" value="200" />
+              </label>
+              <p class="help-text">Default milliseconds per frame for sprite sheet animation playback. Can be overridden per-session in the animation bar.</p>
             </div>
           </div>
 
