@@ -1585,6 +1585,7 @@ function setupRegionSelect() {
     regionSelect.region = null;
     clearBtn.style.display = 'none';
     document.getElementById('region-tile-preview').style.display = 'none';
+    document.getElementById('region-export').style.display = 'none';
     document.getElementById('region-info').textContent = 'Drag to select a region';
     drawRegionOverlay();
   });
@@ -1616,6 +1617,7 @@ function setupRegionSelect() {
     if (regionSelect.region && regionSelect.region.w > 0 && regionSelect.region.h > 0) {
       document.getElementById('region-clear').style.display = '';
       document.getElementById('region-tile-preview').style.display = '';
+      document.getElementById('region-export').style.display = '';
     }
   });
 
@@ -1735,8 +1737,54 @@ function renderTilePreview() {
   }
 }
 
+function exportRegion() {
+  const img = document.getElementById('carousel-image');
+  const r = regionSelect.region;
+  if (!img.naturalWidth || !r || r.w <= 0 || r.h <= 0) return;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = r.w;
+  canvas.height = r.h;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+
+  const originalName = basename(carousel.items[carousel.currentIndex]);
+  const nameNoExt = originalName.replace(/\.[^.]+$/, '');
+  const defaultName = `${nameNoExt}_region_${r.x}_${r.y}_${r.w}x${r.h}.png`;
+
+  canvas.toBlob(async (blob) => {
+    if (!blob) return;
+    const btn = document.getElementById('region-export');
+    if (window.api.saveFileDialog) {
+      const buffer = await blob.arrayBuffer();
+      const result = await window.api.saveFileDialog(defaultName, new Uint8Array(buffer));
+      if (result) {
+        btn.textContent = 'Saved!';
+        setTimeout(() => { btn.textContent = 'Export Region'; }, 1500);
+      }
+    } else {
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Export Region'; }, 1500);
+      } catch {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = defaultName;
+        a.click();
+        URL.revokeObjectURL(url);
+        btn.textContent = 'Downloaded!';
+        setTimeout(() => { btn.textContent = 'Export Region'; }, 1500);
+      }
+    }
+  }, 'image/png');
+}
+
 function setupTilePreview() {
   document.getElementById('region-tile-preview').addEventListener('click', showTilePreview);
+  document.getElementById('region-export').addEventListener('click', exportRegion);
   document.getElementById('tile-preview-close').addEventListener('click', hideTilePreview);
   document.getElementById('tile-preview').querySelector('.tile-preview-backdrop').addEventListener('click', hideTilePreview);
 
