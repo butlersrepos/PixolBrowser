@@ -2148,8 +2148,8 @@ function setupSpriteGrid() {
   const bar = document.getElementById('carousel-sprite-bar');
   const colsInput = document.getElementById('sprite-cols');
   const rowsInput = document.getElementById('sprite-rows');
-  const applyBtn = document.getElementById('sprite-grid-apply');
   const clearBtn = document.getElementById('sprite-grid-clear');
+  let applyDebounce = null;
 
   toggleBtn.addEventListener('click', () => {
     spriteGrid.enabled = !spriteGrid.enabled;
@@ -2164,6 +2164,7 @@ function setupSpriteGrid() {
         spriteGrid.cols = config.cols;
         spriteGrid.rows = config.rows;
       }
+      applyGrid();
     }
     drawGridOverlay();
   });
@@ -2183,9 +2184,13 @@ function setupSpriteGrid() {
     drawGridOverlay();
   }
 
-  applyBtn.addEventListener('click', applyGrid);
-  colsInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyGrid(); });
-  rowsInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyGrid(); });
+  // Auto-apply on input change (debounced)
+  function onGridInputChange() {
+    clearTimeout(applyDebounce);
+    applyDebounce = setTimeout(applyGrid, 200);
+  }
+  colsInput.addEventListener('input', onGridInputChange);
+  rowsInput.addEventListener('input', onGridInputChange);
 
   clearBtn.addEventListener('click', () => {
     if (spriteGrid.playing) spriteAnimStop();
@@ -3484,6 +3489,19 @@ async function init() {
       }
       if (e.key === 'ArrowLeft') { carouselNav(-1); e.preventDefault(); return; }
       if (e.key === 'ArrowRight') { carouselNav(1); e.preventDefault(); return; }
+      // P key: toggle animation play/pause
+      if (e.key === 'p' || e.key === 'P') {
+        if (spriteGrid.enabled && spriteGrid.cols * spriteGrid.rows > 1 && !inInput) {
+          e.preventDefault();
+          if (spriteGrid.playing) {
+            spriteAnimStop();
+            document.getElementById('carousel-image').style.visibility = '';
+          } else {
+            spriteAnimStart();
+          }
+          return;
+        }
+      }
       return;
     }
 
