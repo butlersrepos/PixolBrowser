@@ -2842,8 +2842,9 @@ function renderSettingsTheme() {
   const presetsEl = document.getElementById('theme-presets');
   presetsEl.innerHTML = '';
   for (const [name, colors] of Object.entries(builtInThemes)) {
+    const isActive = Object.keys(colors).every(k => currentTheme[k] === colors[k]);
     const btn = document.createElement('button');
-    btn.className = 'preset-btn';
+    btn.className = 'preset-btn' + (isActive ? ' active' : '');
     btn.innerHTML = `
       <span class="preset-swatches">
         <span class="preset-swatch" style="background:${colors.bg}"></span>
@@ -2870,8 +2871,9 @@ function renderSettingsTheme() {
   } else {
     savedList.innerHTML = '';
     for (const name of names) {
+      const isActive = Object.keys(savedThemes[name]).every(k => currentTheme[k] === savedThemes[name][k]);
       const item = document.createElement('div');
-      item.className = 'saved-theme-item';
+      item.className = 'saved-theme-item' + (isActive ? ' active' : '');
       item.innerHTML = `
         <button class="saved-theme-name">${escHtml(name)}</button>
         <button class="saved-theme-delete" title="Delete">&times;</button>

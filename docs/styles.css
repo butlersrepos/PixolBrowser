@@ -1438,6 +1438,11 @@ html, body {
 }
 
 .preset-btn:hover { border-color: var(--accent); }
+.preset-btn.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, var(--card));
+  box-shadow: 0 0 0 1px var(--accent);
+}
 
 .preset-swatches {
   display: flex;
@@ -1484,6 +1489,10 @@ html, body {
 }
 
 .saved-theme-item:hover { background: var(--card); }
+.saved-theme-item.active {
+  background: color-mix(in srgb, var(--accent) 10%, var(--card));
+  border-left: 2px solid var(--accent);
+}
 
 .saved-theme-name {
   flex: 1;
