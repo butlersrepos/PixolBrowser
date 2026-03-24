@@ -133,13 +133,16 @@
         <div class="detail-empty-hint">Cmd+Click to multi-select</div>
       </div>
       <div id="detail-content" class="hidden">
-        <div id="detail-bg-bar" class="bg-mode-bar">
-          <button data-bg="dark" class="active" title="Dark background">Dark</button>
-          <button data-bg="checker" title="Checkerboard background">Checker</button>
-          <button data-bg="white" title="White background">White</button>
-          <button data-bg="custom" title="Custom color">Custom</button>
-          <input type="color" id="detail-bg-color" class="color-input" value="#000000" />
-        </div>
+        <fieldset class="bg-mode-fieldset">
+          <legend>Background</legend>
+          <div id="detail-bg-bar" class="bg-mode-bar">
+            <button data-bg="dark" class="active" title="Dark background">Dark</button>
+            <button data-bg="checker" title="Checkerboard background">Checker</button>
+            <button data-bg="white" title="White background">White</button>
+            <button data-bg="custom" title="Custom color">Custom</button>
+            <input type="color" id="detail-bg-color" class="color-input" value="#000000" />
+          </div>
+        </fieldset>
         <div id="detail-image-wrapper">
           <img id="detail-image" />
           <button id="btn-reset-view" title="Reset zoom &amp; position">&#8982;</button>
@@ -179,13 +182,16 @@
         <button id="carousel-reveal" class="carousel-titlebar-btn carousel-text-btn" title="Open containing folder">&#128193; Open Folder</button>
         <button id="carousel-sprite-toggle" class="carousel-titlebar-btn carousel-text-btn" title="Sprite sheet tools">&#9638; Grid</button>
         <button id="carousel-region-toggle" class="carousel-titlebar-btn carousel-text-btn" title="Select region">&#9645; Region</button>
-        <div id="carousel-bg-bar" class="bg-mode-bar">
-          <button data-bg="dark" class="active" title="Dark background">Dark</button>
-          <button data-bg="checker" title="Checkerboard">Checker</button>
-          <button data-bg="white" title="White">White</button>
-          <button data-bg="custom" title="Custom">Custom</button>
-          <input type="color" id="carousel-bg-input" class="color-input" value="#000000" />
-        </div>
+        <fieldset class="bg-mode-fieldset">
+          <legend>BG</legend>
+          <div id="carousel-bg-bar" class="bg-mode-bar">
+            <button data-bg="dark" class="active" title="Dark background">Dark</button>
+            <button data-bg="checker" title="Checkerboard">Checker</button>
+            <button data-bg="white" title="White">White</button>
+            <button data-bg="custom" title="Custom">Custom</button>
+            <input type="color" id="carousel-bg-input" class="color-input" value="#000000" />
+          </div>
+        </fieldset>
         <button id="carousel-reset" class="carousel-titlebar-btn" title="Reset zoom">&#8982;</button>
         <button id="carousel-close" class="carousel-titlebar-btn" title="Close (Esc)">&times;</button>
       </div>
