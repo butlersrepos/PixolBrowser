@@ -178,6 +178,7 @@
         <button id="carousel-copy-path" class="carousel-titlebar-btn carousel-text-btn" title="Copy file path">&#128194; Copy Path</button>
         <button id="carousel-reveal" class="carousel-titlebar-btn carousel-text-btn" title="Show in Finder">&#128269; Reveal</button>
         <button id="carousel-sprite-toggle" class="carousel-titlebar-btn carousel-text-btn" title="Sprite sheet tools">&#9638; Grid</button>
+        <button id="carousel-region-toggle" class="carousel-titlebar-btn carousel-text-btn" title="Select region">&#9645; Region</button>
         <div id="carousel-bg-bar" class="bg-mode-bar">
           <button data-bg="dark" class="active" title="Dark background">Dark</button>
           <button data-bg="checker" title="Checkerboard">&#9638;</button>
@@ -202,9 +203,16 @@
         <div class="sprite-bar-spacer"></div>
         <span id="sprite-frame-info" class="sprite-frame-info"></span>
       </div>
+      <div id="carousel-region-bar" class="carousel-region-bar hidden">
+        <span class="sprite-bar-label">Region:</span>
+        <span id="region-info" class="sprite-frame-info">Drag to select a region</span>
+        <div class="sprite-bar-spacer"></div>
+        <button id="region-clear" class="btn-sm btn-secondary" style="display:none">Clear</button>
+      </div>
       <div id="carousel-image-wrapper">
         <img id="carousel-image" />
         <canvas id="carousel-grid-overlay" class="carousel-grid-overlay"></canvas>
+        <canvas id="carousel-region-overlay" class="carousel-region-overlay hidden"></canvas>
       </div>
       <button id="carousel-prev" class="carousel-btn carousel-btn-prev" title="Previous (Left arrow)">&#8249;</button>
       <button id="carousel-next" class="carousel-btn carousel-btn-next" title="Next (Right arrow)">&#8250;</button>

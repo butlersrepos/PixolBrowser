@@ -1500,6 +1500,13 @@ function closeCarousel() {
   document.getElementById('carousel-sprite-toggle').classList.remove('active');
   const canvas = document.getElementById('carousel-grid-overlay');
   if (canvas) { canvas.width = 0; canvas.height = 0; }
+  // Reset region select UI
+  regionSelect.enabled = false;
+  regionSelect.region = null;
+  document.getElementById('carousel-region-bar').classList.add('hidden');
+  document.getElementById('carousel-region-toggle').classList.remove('active');
+  const regionCanvas = document.getElementById('carousel-region-overlay');
+  if (regionCanvas) { regionCanvas.classList.add('hidden'); regionCanvas.width = 0; }
 }
 
 function saveCarouselView() {
@@ -1541,6 +1548,151 @@ function carouselNav(delta) {
   saveCarouselView();
   carousel.currentIndex = (carousel.currentIndex + delta + carousel.items.length) % carousel.items.length;
   loadCarouselImage();
+}
+
+// ===== Region Select =====
+const regionSelect = {
+  enabled: false,
+  dragging: false,
+  startX: 0, startY: 0,
+  // Region in image pixel coordinates (not display coords)
+  region: null, // { x, y, w, h } in image pixels
+};
+
+function setupRegionSelect() {
+  const toggleBtn = document.getElementById('carousel-region-toggle');
+  const bar = document.getElementById('carousel-region-bar');
+  const canvas = document.getElementById('carousel-region-overlay');
+  const clearBtn = document.getElementById('region-clear');
+
+  toggleBtn.addEventListener('click', () => {
+    regionSelect.enabled = !regionSelect.enabled;
+    bar.classList.toggle('hidden', !regionSelect.enabled);
+    canvas.classList.toggle('hidden', !regionSelect.enabled);
+    toggleBtn.classList.toggle('active', regionSelect.enabled);
+    if (regionSelect.enabled) {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+      drawRegionOverlay();
+    } else {
+      regionSelect.region = null;
+      clearBtn.style.display = 'none';
+      document.getElementById('region-info').textContent = 'Drag to select a region';
+    }
+  });
+
+  clearBtn.addEventListener('click', () => {
+    regionSelect.region = null;
+    clearBtn.style.display = 'none';
+    document.getElementById('region-info').textContent = 'Drag to select a region';
+    drawRegionOverlay();
+  });
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (!regionSelect.enabled) return;
+    regionSelect.dragging = true;
+    const rect = canvas.getBoundingClientRect();
+    regionSelect.startX = e.clientX - rect.left;
+    regionSelect.startY = e.clientY - rect.top;
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!regionSelect.dragging) return;
+    const rect = canvas.getBoundingClientRect();
+    const curX = e.clientX - rect.left;
+    const curY = e.clientY - rect.top;
+    // Convert display coords to image pixel coords
+    const region = displayToImageRegion(regionSelect.startX, regionSelect.startY, curX, curY);
+    if (region) {
+      regionSelect.region = region;
+      drawRegionOverlay();
+      updateRegionInfo();
+    }
+  });
+
+  canvas.addEventListener('mouseup', () => {
+    regionSelect.dragging = false;
+    if (regionSelect.region && regionSelect.region.w > 0 && regionSelect.region.h > 0) {
+      document.getElementById('region-clear').style.display = '';
+    }
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    regionSelect.dragging = false;
+  });
+}
+
+function displayToImageRegion(dx1, dy1, dx2, dy2) {
+  const img = document.getElementById('carousel-image');
+  if (!img.naturalWidth) return null;
+
+  const z = carousel.zoom;
+  const px = carousel.panX;
+  const py = carousel.panY;
+  const dispW = carousel.baseW * z;
+  const dispH = carousel.baseH * z;
+
+  // Convert display coords to image pixel coords
+  const ix1 = Math.round(((Math.min(dx1, dx2) - px) / dispW) * img.naturalWidth);
+  const iy1 = Math.round(((Math.min(dy1, dy2) - py) / dispH) * img.naturalHeight);
+  const ix2 = Math.round(((Math.max(dx1, dx2) - px) / dispW) * img.naturalWidth);
+  const iy2 = Math.round(((Math.max(dy1, dy2) - py) / dispH) * img.naturalHeight);
+
+  // Clamp to image bounds
+  const x = Math.max(0, Math.min(ix1, img.naturalWidth));
+  const y = Math.max(0, Math.min(iy1, img.naturalHeight));
+  const w = Math.max(0, Math.min(ix2, img.naturalWidth) - x);
+  const h = Math.max(0, Math.min(iy2, img.naturalHeight) - y);
+
+  return { x, y, w, h };
+}
+
+function drawRegionOverlay() {
+  const canvas = document.getElementById('carousel-region-overlay');
+  if (!regionSelect.enabled) return;
+  const wrapper = canvas.parentElement;
+  canvas.width = wrapper.clientWidth;
+  canvas.height = wrapper.clientHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!regionSelect.region || regionSelect.region.w <= 0 || regionSelect.region.h <= 0) return;
+
+  const img = document.getElementById('carousel-image');
+  if (!img.naturalWidth) return;
+
+  const z = carousel.zoom;
+  const px = carousel.panX;
+  const py = carousel.panY;
+  const dispW = carousel.baseW * z;
+  const dispH = carousel.baseH * z;
+  const r = regionSelect.region;
+
+  // Convert image pixel coords back to display coords
+  const dx = px + (r.x / img.naturalWidth) * dispW;
+  const dy = py + (r.y / img.naturalHeight) * dispH;
+  const dw = (r.w / img.naturalWidth) * dispW;
+  const dh = (r.h / img.naturalHeight) * dispH;
+
+  // Draw dimmed overlay outside selection
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(dx, dy, dw, dh);
+
+  // Draw selection border
+  ctx.strokeStyle = 'rgba(88, 166, 255, 0.8)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 4]);
+  ctx.strokeRect(dx, dy, dw, dh);
+}
+
+function updateRegionInfo() {
+  const r = regionSelect.region;
+  if (!r || r.w <= 0 || r.h <= 0) {
+    document.getElementById('region-info').textContent = 'Drag to select a region';
+    return;
+  }
+  document.getElementById('region-info').textContent = `${r.w}x${r.h} at (${r.x}, ${r.y})`;
 }
 
 // ===== Sprite Grid =====
@@ -3120,6 +3272,7 @@ async function init() {
   setupBgModeBar('detail-bg-bar', 'detail-image-wrapper', 'detail-bg-color', 'detailBgMode');
   setupCarousel();
   setupSpriteGrid();
+  setupRegionSelect();
   setupSettings();
   setupDragSelect();
   setupDimFilter();

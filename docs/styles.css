@@ -1210,6 +1210,27 @@ html, body {
   color: var(--muted);
 }
 
+/* Region Bar */
+.carousel-region-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.carousel-region-bar.hidden { display: none; }
+
+.carousel-region-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  cursor: crosshair;
+}
+.carousel-region-overlay.hidden { display: none; }
+
 .carousel-grid-overlay {
   position: absolute;
   top: 0;
