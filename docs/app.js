@@ -1663,6 +1663,33 @@ function setupRegionSelect() {
   canvas.addEventListener('mouseleave', () => {
     regionSelect.dragging = false;
   });
+
+  // Pass wheel events through to wrapper for zoom during region select
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (!carousel.baseW) return;
+    const wrapper = document.getElementById('carousel-image-wrapper');
+    const rect = wrapper.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const oldZoom = carousel.zoom;
+    const factor = e.deltaY > 0 ? 1 / 1.08 : 1.08;
+    carousel.zoom = Math.max(1, Math.min(40, carousel.zoom * factor));
+    if (carousel.zoom <= 1) {
+      carousel.zoom = 1;
+      carousel.panX = (wrapper.clientWidth - carousel.baseW) / 2;
+      carousel.panY = (wrapper.clientHeight - carousel.baseH) / 2;
+    } else {
+      const ix = (mx - carousel.panX) / oldZoom;
+      const iy = (my - carousel.panY) / oldZoom;
+      carousel.panX = mx - ix * carousel.zoom;
+      carousel.panY = my - iy * carousel.zoom;
+    }
+    const img = document.getElementById('carousel-image');
+    img.style.transform = `translate(${carousel.panX}px, ${carousel.panY}px) scale(${carousel.zoom})`;
+    drawGridOverlay();
+    drawRegionOverlay();
+  });
 }
 
 function displayToImageRegion(dx1, dy1, dx2, dy2) {
@@ -2319,6 +2346,7 @@ function setupCarousel() {
     wrapper.classList.toggle('zoomed-in', isZoomed && !carousel.isPanning);
     wrapper.classList.toggle('panning', carousel.isPanning);
     drawGridOverlay();
+    drawRegionOverlay();
   }
 
   img.addEventListener('load', () => {
@@ -2360,10 +2388,9 @@ function setupCarousel() {
     applyTransform();
   });
 
-  // Scroll wheel zoom
+  // Scroll wheel zoom (also works during region select)
   wrapper.addEventListener('wheel', (e) => {
     e.preventDefault();
-    if (regionSelect.enabled) return;
     if (!carousel.baseW) return;
     const rect = wrapper.getBoundingClientRect();
     const mx = e.clientX - rect.left;
