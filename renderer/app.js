@@ -2269,6 +2269,7 @@ function setupCarousel() {
 
   // Click to zoom
   wrapper.addEventListener('click', (e) => {
+    if (regionSelect.enabled) return;
     if (carousel.didDrag) { carousel.didDrag = false; return; }
     if (!carousel.baseW) return;
 
@@ -2295,6 +2296,7 @@ function setupCarousel() {
   // Scroll wheel zoom
   wrapper.addEventListener('wheel', (e) => {
     e.preventDefault();
+    if (regionSelect.enabled) return;
     if (!carousel.baseW) return;
     const rect = wrapper.getBoundingClientRect();
     const mx = e.clientX - rect.left;
@@ -2316,6 +2318,7 @@ function setupCarousel() {
 
   // Drag to pan
   wrapper.addEventListener('mousedown', (e) => {
+    if (regionSelect.enabled) return;
     if (carousel.zoom <= 1) return;
     if (e.button !== 0) return;
     e.preventDefault();
