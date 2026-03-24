@@ -269,25 +269,108 @@ function getVisibleImages() {
   return cachedVisibleImages;
 }
 
+// ===== Omni Search Parser =====
+// Parse search query for prefix modifiers: t:tag, s:size, d:date, f:format
+const DIM_PRESETS = {
+  tiny: { min: 0, max: 32 },
+  small: { min: 33, max: 64 },
+  med: { min: 65, max: 128 },
+  medium: { min: 65, max: 128 },
+  lg: { min: 129, max: 256 },
+  large: { min: 129, max: 256 },
+  xl: { min: 257, max: Infinity },
+};
+
+function parseSearchQuery(raw) {
+  const result = { text: '', tags: [], dims: null, fileTypes: [], dateFilter: null };
+  const parts = raw.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+  const textParts = [];
+  for (const part of parts) {
+    const lower = part.toLowerCase();
+    if (lower.startsWith('t:')) {
+      const val = part.slice(2).replace(/^"|"$/g, '');
+      if (val) result.tags.push(val.toLowerCase());
+    } else if (lower.startsWith('s:')) {
+      const val = part.slice(2).toLowerCase();
+      if (DIM_PRESETS[val]) {
+        result.dims = DIM_PRESETS[val];
+      } else {
+        const rangeMatch = val.match(/^(\d+)\s*-\s*(\d+)$/);
+        if (rangeMatch) {
+          result.dims = { min: parseInt(rangeMatch[1]), max: parseInt(rangeMatch[2]) };
+        }
+      }
+    } else if (lower.startsWith('f:')) {
+      const val = part.slice(2).toLowerCase().replace(/^\./, '');
+      if (val) result.fileTypes.push('.' + val);
+    } else if (lower.startsWith('d:')) {
+      const val = part.slice(2).toLowerCase();
+      if (val === 'recent' || val === 'today') {
+        result.dateFilter = Date.now() - 24 * 60 * 60 * 1000;
+      } else if (val === 'week') {
+        result.dateFilter = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      } else if (val === 'month') {
+        result.dateFilter = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      } else if (val.startsWith('>')) {
+        const ts = Date.parse(val.slice(1));
+        if (!isNaN(ts)) result.dateFilter = ts;
+      }
+    } else {
+      textParts.push(part);
+    }
+  }
+  result.text = textParts.join(' ').trim();
+  return result;
+}
+
 function applyFilters() {
   let images = getVisibleImages();
 
-  // Tag filter
+  // Tag filter (sidebar)
   if (state.currentFilter === 'untagged') {
     images = images.filter(img => !getTagsForImage(img).length);
   } else if (state.currentFilter !== 'all') {
     images = images.filter(img => getTagsForImage(img).includes(state.currentFilter));
   }
 
-  // Search filter
-  if (state.searchQuery) {
-    const q = state.searchQuery.toLowerCase();
+  // Parse omni search
+  const parsed = state.searchQuery ? parseSearchQuery(state.searchQuery) : null;
+
+  // Search text filter (path matching)
+  if (parsed?.text) {
+    const q = parsed.text.toLowerCase();
     images = images.filter(img => (lowercaseIndex?.get(img) || img.toLowerCase()).includes(q));
   }
 
-  // Dimension filter
-  if (state.dimFilter) {
-    const { min, max } = state.dimFilter;
+  // Tag prefix filter (t:)
+  if (parsed?.tags.length) {
+    images = images.filter(img => {
+      const imgTags = getTagsForImage(img).map(t => t.toLowerCase());
+      return parsed.tags.every(t => imgTags.some(it => it.includes(t)));
+    });
+  }
+
+  // File type prefix filter (f:)
+  if (parsed?.fileTypes.length) {
+    images = images.filter(img => {
+      const lower = img.toLowerCase();
+      return parsed.fileTypes.some(ext => lower.endsWith(ext));
+    });
+  }
+
+  // Date prefix filter (d:)
+  if (parsed?.dateFilter) {
+    const threshold = parsed.dateFilter;
+    images = images.filter(img => {
+      const d = state.dimensions[img];
+      return d?.modified && d.modified >= threshold;
+    });
+  }
+
+  // Dimension filter: s: prefix overrides UI dim filter, otherwise use UI dim filter
+  const effectiveDim = parsed?.dims || state.dimFilter;
+  if (effectiveDim) {
+    const { min, max } = effectiveDim;
     images = images.filter(img => {
       const d = state.dimensions[img];
       if (!d) return false;
