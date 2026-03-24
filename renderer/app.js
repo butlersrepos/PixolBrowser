@@ -1943,7 +1943,7 @@ function spriteAnimStart() {
   spriteGrid.heldFrame = false;
   spriteGrid.currentFrame = frames[0];
   const playBtn = document.getElementById('sprite-play');
-  playBtn.innerHTML = '&#9646;&#9646; Pause';
+  playBtn.innerHTML = '&#9646;&#9646; Pause (P)';
   spriteAnimShowFrame();
   spriteAnimSchedule();
 }
@@ -1953,7 +1953,7 @@ function spriteAnimStop(holdFrame) {
   clearTimeout(spriteGrid.animTimer);
   spriteGrid.animTimer = null;
   const playBtn = document.getElementById('sprite-play');
-  playBtn.innerHTML = '&#9654; Play';
+  playBtn.innerHTML = '&#9654; Play (P)';
   spriteGrid.heldFrame = !!holdFrame;
   if (!holdFrame) {
     document.getElementById('carousel-image').style.visibility = '';
