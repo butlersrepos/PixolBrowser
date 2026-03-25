@@ -118,7 +118,7 @@ Foundational refactor. Sequential dependencies.
 - [ ] **21. Nested/Hierarchical Tags** — `/` separator: `Characters/Paladin`, `Tiles/Ground`. Sidebar renders as collapsible groups (Gmail style). Parent tag filter includes children.
   - Touches: `renderer/app.js`
 
-- [ ] **22. Asset Shopping Cart** — Toolbar icon with badge count. Add to cart while browsing. Cart panel with remove. "Export Cart" batch copies to profile export folder. Persists during session.
+- [x] **22. Asset Shopping Cart** — Evolved into Sheet Composer. Capture regions and frames into a collection, compose them as draggable stickers on a canvas, export as PNG.
   - Touches: `renderer/app.js`
 
 - [ ] **23. Drag-and-Drop Out** — Drag images from gallery into Finder/Godot/Unity. Electron `startDrag` API. Web: not supported (tooltip explaining).
@@ -147,7 +147,7 @@ High-impact, higher complexity. These are where PixolBrowser differentiates from
 - [ ] **27. Palette Swap Preview** — Extract unique color palette from sprite. Display as swatches. Select target palette (presets or custom). Real-time recolor preview. Export recolored PNG.
   - Touches: `renderer/app.js`
 
-- [ ] **28. Sprite Sheet Composition** — Select isolated frames from different sheets. Arrange on canvas. Set frame size, rows/columns, spacing. Export as new PNG. Primary use case: cherry-pick frames from related sheets to build custom animations.
+- [x] **28. Sprite Sheet Composition** — Implemented as Sheet Composer: capture regions/frames, drag-and-drop placement on configurable canvas with grid snapping, export as PNG.
   - Depends on: #7
   - Touches: `renderer/app.js`
 
