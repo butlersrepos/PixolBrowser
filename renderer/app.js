@@ -3058,6 +3058,13 @@ function setupCarousel() {
   // Carousel background mode bar
   setupBgModeBar('carousel-bg-bar', 'carousel-image-wrapper', 'carousel-bg-input', 'carouselBgMode');
 
+  // Expose pan for keyboard panning
+  carousel.pan = (dx, dy) => {
+    carousel.panX += dx;
+    carousel.panY += dy;
+    applyTransform();
+  };
+
   // Expose refit for when bars change the wrapper size
   // Preserves the image point currently at viewport center
   carousel.refit = () => {
@@ -4161,11 +4168,19 @@ async function init() {
             spriteAnimStop();
             document.getElementById('carousel-image').style.visibility = '';
           } else {
-            // If held on last frame, image is already hidden — spriteAnimStart handles it
             spriteAnimStart();
           }
           return;
         }
+      }
+      // WASD: pan when zoomed in
+      if (carousel.zoom > 1 && !inInput) {
+        const step = e.shiftKey ? 100 : 40;
+        const key = e.key.toLowerCase();
+        if (key === 'w') { carousel.pan(0, step); e.preventDefault(); return; }
+        if (key === 's') { carousel.pan(0, -step); e.preventDefault(); return; }
+        if (key === 'a') { carousel.pan(step, 0); e.preventDefault(); return; }
+        if (key === 'd') { carousel.pan(-step, 0); e.preventDefault(); return; }
       }
       return;
     }
