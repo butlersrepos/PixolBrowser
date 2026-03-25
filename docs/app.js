@@ -425,6 +425,9 @@ function renderFilmstrip() {
     item.addEventListener('click', () => {
       const alreadyPlaced = composer.stickers.some(s => s.id === cap.id);
       if (!alreadyPlaced) {
+        if (cap.width > composer.canvasW || cap.height > composer.canvasH) {
+          if (!confirm(`This region (${cap.width}x${cap.height}) is larger than the canvas (${composer.canvasW}x${composer.canvasH}). Place it anyway?`)) return;
+        }
         addStickerFromCapture(cap);
       } else {
         // Select existing
@@ -538,6 +541,56 @@ function setupComposer() {
       composer.selectedId = null;
       renderComposer();
     }
+  });
+
+  // Export as PNG
+  document.getElementById('composer-export').addEventListener('click', () => {
+    if (composer.stickers.length === 0) return;
+
+    // Render to an offscreen canvas at exact pixel dimensions
+    const offscreen = document.createElement('canvas');
+    offscreen.width = composer.canvasW;
+    offscreen.height = composer.canvasH;
+    const ctx = offscreen.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+
+    for (const s of composer.stickers) {
+      const temp = document.createElement('canvas');
+      temp.width = s.w;
+      temp.height = s.h;
+      temp.getContext('2d').putImageData(s.imageData, 0, 0);
+      ctx.drawImage(temp, s.x, s.y);
+    }
+
+    const defaultName = `composed_sheet_${composer.canvasW}x${composer.canvasH}.png`;
+
+    offscreen.toBlob(async (blob) => {
+      if (!blob) return;
+      const btn = document.getElementById('composer-export');
+      if (window.api.saveFileDialog) {
+        const buffer = await blob.arrayBuffer();
+        const result = await window.api.saveFileDialog(defaultName, new Uint8Array(buffer));
+        if (result) {
+          btn.textContent = 'Saved!';
+          setTimeout(() => { btn.textContent = 'Export PNG'; }, 1500);
+        }
+      } else {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = 'Export PNG'; }, 1500);
+        } catch {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = defaultName;
+          a.click();
+          URL.revokeObjectURL(url);
+          btn.textContent = 'Downloaded!';
+          setTimeout(() => { btn.textContent = 'Export PNG'; }, 1500);
+        }
+      }
+    }, 'image/png');
   });
 
   // Clear all
