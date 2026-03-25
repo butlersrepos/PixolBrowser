@@ -1593,10 +1593,105 @@ function carouselNav(delta) {
 const regionSelect = {
   enabled: false,
   dragging: false,
+  dragMode: null, // 'draw' | 'edge-top' | 'edge-bottom' | 'edge-left' | 'edge-right'
   startX: 0, startY: 0,
+  dragStartRegion: null, // snapshot of region at drag start for edge adjustments
   // Region in image pixel coordinates (not display coords)
   region: null, // { x, y, w, h } in image pixels
 };
+
+const EDGE_THRESHOLD = 8; // pixels in display coords for edge hit detection
+
+function regionImageToDisplay(r) {
+  const img = document.getElementById('carousel-image');
+  if (!img.naturalWidth || !r) return null;
+  const z = carousel.zoom;
+  const dispW = carousel.baseW * z;
+  const dispH = carousel.baseH * z;
+  return {
+    x: carousel.panX + (r.x / img.naturalWidth) * dispW,
+    y: carousel.panY + (r.y / img.naturalHeight) * dispH,
+    w: (r.w / img.naturalWidth) * dispW,
+    h: (r.h / img.naturalHeight) * dispH,
+  };
+}
+
+function regionHitTest(dispX, dispY) {
+  // Returns which edge the cursor is near, or null
+  if (!regionSelect.region) return null;
+  const dr = regionImageToDisplay(regionSelect.region);
+  if (!dr) return null;
+  const t = EDGE_THRESHOLD;
+  const inX = dispX >= dr.x - t && dispX <= dr.x + dr.w + t;
+  const inY = dispY >= dr.y - t && dispY <= dr.y + dr.h + t;
+  if (!inX || !inY) return null;
+
+  const nearTop = Math.abs(dispY - dr.y) < t;
+  const nearBottom = Math.abs(dispY - (dr.y + dr.h)) < t;
+  const nearLeft = Math.abs(dispX - dr.x) < t;
+  const nearRight = Math.abs(dispX - (dr.x + dr.w)) < t;
+
+  if (nearTop) return 'edge-top';
+  if (nearBottom) return 'edge-bottom';
+  if (nearLeft) return 'edge-left';
+  if (nearRight) return 'edge-right';
+  return null;
+}
+
+function regionEdgeCursor(edge) {
+  switch (edge) {
+    case 'edge-top': case 'edge-bottom': return 'ns-resize';
+    case 'edge-left': case 'edge-right': return 'ew-resize';
+    default: return 'crosshair';
+  }
+}
+
+function regionApplyZoomPan(wrapper, e) {
+  if (!carousel.baseW) return;
+  const isMeta = e.metaKey || e.ctrlKey;
+
+  if (isMeta) {
+    // Cmd/Ctrl + wheel = zoom
+    const rect = wrapper.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const oldZoom = carousel.zoom;
+    const factor = e.deltaY > 0 ? 1 / 1.08 : 1.08;
+    carousel.zoom = Math.max(1, Math.min(40, carousel.zoom * factor));
+    if (carousel.zoom <= 1) {
+      carousel.zoom = 1;
+      carousel.panX = (wrapper.clientWidth - carousel.baseW) / 2;
+      carousel.panY = (wrapper.clientHeight - carousel.baseH) / 2;
+    } else {
+      const ix = (mx - carousel.panX) / oldZoom;
+      const iy = (my - carousel.panY) / oldZoom;
+      carousel.panX = mx - ix * carousel.zoom;
+      carousel.panY = my - iy * carousel.zoom;
+    }
+  } else if (e.shiftKey) {
+    // Shift + wheel = pan horizontal
+    carousel.panX -= e.deltaY;
+  } else {
+    // Wheel = pan vertical
+    carousel.panY -= e.deltaY;
+  }
+
+  const img = document.getElementById('carousel-image');
+  img.style.transform = `translate(${carousel.panX}px, ${carousel.panY}px) scale(${carousel.zoom})`;
+  drawGridOverlay();
+  drawRegionOverlay();
+}
+
+function regionFinishDraw() {
+  regionSelect.dragging = false;
+  regionSelect.dragMode = null;
+  regionSelect.dragStartRegion = null;
+  if (regionSelect.region && regionSelect.region.w > 0 && regionSelect.region.h > 0) {
+    document.getElementById('region-clear').style.display = '';
+    document.getElementById('region-tile-preview').style.display = '';
+    document.getElementById('region-export').style.display = '';
+  }
+}
 
 function setupRegionSelect() {
   const toggleBtn = document.getElementById('carousel-region-toggle');
@@ -1633,66 +1728,105 @@ function setupRegionSelect() {
     drawRegionOverlay();
   });
 
+  // Mouse down: start drawing or start edge drag
   canvas.addEventListener('mousedown', (e) => {
-    if (!regionSelect.enabled) return;
-    regionSelect.dragging = true;
+    if (!regionSelect.enabled || e.button !== 0) return;
     const rect = canvas.getBoundingClientRect();
-    regionSelect.startX = e.clientX - rect.left;
-    regionSelect.startY = e.clientY - rect.top;
+    const dx = e.clientX - rect.left;
+    const dy = e.clientY - rect.top;
+
+    const edge = regionHitTest(dx, dy);
+    if (edge) {
+      // Start edge adjustment
+      regionSelect.dragging = true;
+      regionSelect.dragMode = edge;
+      regionSelect.startX = dx;
+      regionSelect.startY = dy;
+      regionSelect.dragStartRegion = { ...regionSelect.region };
+    } else {
+      // Start new region draw
+      regionSelect.dragging = true;
+      regionSelect.dragMode = 'draw';
+      regionSelect.startX = dx;
+      regionSelect.startY = dy;
+    }
   });
 
+  // Mouse move: draw region, adjust edge, or update cursor
   canvas.addEventListener('mousemove', (e) => {
-    if (!regionSelect.dragging) return;
     const rect = canvas.getBoundingClientRect();
-    const curX = e.clientX - rect.left;
-    const curY = e.clientY - rect.top;
-    // Convert display coords to image pixel coords
-    const region = displayToImageRegion(regionSelect.startX, regionSelect.startY, curX, curY);
-    if (region) {
-      regionSelect.region = region;
+    const dx = e.clientX - rect.left;
+    const dy = e.clientY - rect.top;
+
+    if (!regionSelect.dragging) {
+      // Update cursor based on hover
+      const edge = regionHitTest(dx, dy);
+      canvas.style.cursor = regionEdgeCursor(edge);
+      return;
+    }
+
+    if (regionSelect.dragMode === 'draw') {
+      const region = displayToImageRegion(regionSelect.startX, regionSelect.startY, dx, dy);
+      if (region) {
+        regionSelect.region = region;
+        drawRegionOverlay();
+        updateRegionInfo();
+      }
+    } else if (regionSelect.dragMode && regionSelect.dragStartRegion) {
+      // Edge adjustment: convert mouse delta to image pixel delta
+      const img = document.getElementById('carousel-image');
+      if (!img.naturalWidth) return;
+      const z = carousel.zoom;
+      const dispW = carousel.baseW * z;
+      const dispH = carousel.baseH * z;
+      const pxPerImgX = dispW / img.naturalWidth;
+      const pxPerImgY = dispH / img.naturalHeight;
+
+      const ddx = dx - regionSelect.startX;
+      const ddy = dy - regionSelect.startY;
+      const sr = regionSelect.dragStartRegion;
+      const r = { ...sr };
+
+      switch (regionSelect.dragMode) {
+        case 'edge-top': {
+          const shift = Math.round(ddy / pxPerImgY);
+          r.y = Math.max(0, Math.min(sr.y + sr.h - 1, sr.y + shift));
+          r.h = sr.y + sr.h - r.y;
+          break;
+        }
+        case 'edge-bottom': {
+          const shift = Math.round(ddy / pxPerImgY);
+          r.h = Math.max(1, Math.min(img.naturalHeight - sr.y, sr.h + shift));
+          break;
+        }
+        case 'edge-left': {
+          const shift = Math.round(ddx / pxPerImgX);
+          r.x = Math.max(0, Math.min(sr.x + sr.w - 1, sr.x + shift));
+          r.w = sr.x + sr.w - r.x;
+          break;
+        }
+        case 'edge-right': {
+          const shift = Math.round(ddx / pxPerImgX);
+          r.w = Math.max(1, Math.min(img.naturalWidth - sr.x, sr.w + shift));
+          break;
+        }
+      }
+
+      regionSelect.region = r;
       drawRegionOverlay();
       updateRegionInfo();
     }
   });
 
-  canvas.addEventListener('mouseup', () => {
-    regionSelect.dragging = false;
-    if (regionSelect.region && regionSelect.region.w > 0 && regionSelect.region.h > 0) {
-      document.getElementById('region-clear').style.display = '';
-      document.getElementById('region-tile-preview').style.display = '';
-      document.getElementById('region-export').style.display = '';
-    }
-  });
-
+  canvas.addEventListener('mouseup', () => regionFinishDraw());
   canvas.addEventListener('mouseleave', () => {
-    regionSelect.dragging = false;
+    if (regionSelect.dragging) regionFinishDraw();
   });
 
-  // Pass wheel events through to wrapper for zoom during region select
+  // Wheel: pan and zoom during region select
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
-    if (!carousel.baseW) return;
-    const wrapper = document.getElementById('carousel-image-wrapper');
-    const rect = wrapper.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    const oldZoom = carousel.zoom;
-    const factor = e.deltaY > 0 ? 1 / 1.08 : 1.08;
-    carousel.zoom = Math.max(1, Math.min(40, carousel.zoom * factor));
-    if (carousel.zoom <= 1) {
-      carousel.zoom = 1;
-      carousel.panX = (wrapper.clientWidth - carousel.baseW) / 2;
-      carousel.panY = (wrapper.clientHeight - carousel.baseH) / 2;
-    } else {
-      const ix = (mx - carousel.panX) / oldZoom;
-      const iy = (my - carousel.panY) / oldZoom;
-      carousel.panX = mx - ix * carousel.zoom;
-      carousel.panY = my - iy * carousel.zoom;
-    }
-    const img = document.getElementById('carousel-image');
-    img.style.transform = `translate(${carousel.panX}px, ${carousel.panY}px) scale(${carousel.zoom})`;
-    drawGridOverlay();
-    drawRegionOverlay();
+    regionApplyZoomPan(document.getElementById('carousel-image-wrapper'), e);
   });
 }
 
@@ -1758,6 +1892,19 @@ function drawRegionOverlay() {
   ctx.lineWidth = 2;
   ctx.setLineDash([4, 4]);
   ctx.strokeRect(dx, dy, dw, dh);
+
+  // Draw edge handles (small rectangles at midpoints)
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(88, 166, 255, 0.9)';
+  const hs = 4; // handle half-size
+  // Top
+  ctx.fillRect(dx + dw / 2 - hs, dy - hs, hs * 2, hs * 2);
+  // Bottom
+  ctx.fillRect(dx + dw / 2 - hs, dy + dh - hs, hs * 2, hs * 2);
+  // Left
+  ctx.fillRect(dx - hs, dy + dh / 2 - hs, hs * 2, hs * 2);
+  // Right
+  ctx.fillRect(dx + dw - hs, dy + dh / 2 - hs, hs * 2, hs * 2);
 }
 
 function updateRegionInfo() {

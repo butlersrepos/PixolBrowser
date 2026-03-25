@@ -1257,7 +1257,7 @@ html, body {
   top: 0;
   left: 0;
   z-index: 2;
-  cursor: crosshair;
+  cursor: crosshair; /* default; overridden dynamically near edges */
 }
 .carousel-region-overlay.hidden { display: none; }
 
