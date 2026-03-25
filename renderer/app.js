@@ -346,7 +346,7 @@ function renderComposer() {
     ctx.drawImage(tempCanvas, s.x, s.y);
 
     // Selection highlight
-    if (s.id === composer.selectedId) {
+    if (s.stickerId === composer.selectedId) {
       ctx.strokeStyle = 'rgba(88, 166, 255, 0.9)';
       ctx.lineWidth = 1;
       ctx.setLineDash([2, 2]);
@@ -373,15 +373,17 @@ function composerSnap(val) {
 }
 
 function addStickerFromCapture(capture) {
+  const stickerId = capture.id + '-' + Date.now().toString(36);
   composer.stickers.push({
-    id: capture.id,
+    stickerId,
+    captureId: capture.id,
     imageData: capture.imageData,
     x: 0,
     y: 0,
     w: capture.width,
     h: capture.height,
   });
-  composer.selectedId = capture.id;
+  composer.selectedId = stickerId;
   renderComposer();
   updateFilmstripBadges();
 }
@@ -421,8 +423,8 @@ function renderFilmstrip() {
     del.addEventListener('click', (e) => {
       e.stopPropagation();
       state.capturedRegions = state.capturedRegions.filter(c => c.id !== cap.id);
-      composer.stickers = composer.stickers.filter(s => s.id !== cap.id);
-      if (composer.selectedId === cap.id) composer.selectedId = null;
+      composer.stickers = composer.stickers.filter(s => s.captureId !== cap.id);
+      if (composer.stickers.every(s => s.stickerId !== composer.selectedId)) composer.selectedId = null;
       updateComposerBadge();
       renderFilmstrip();
       renderComposer();
@@ -430,19 +432,12 @@ function renderFilmstrip() {
     });
     item.appendChild(del);
 
-    // Click to add to canvas (if not already placed)
+    // Click to place another copy on canvas
     item.addEventListener('click', () => {
-      const alreadyPlaced = composer.stickers.some(s => s.id === cap.id);
-      if (!alreadyPlaced) {
-        if (cap.width > composer.canvasW || cap.height > composer.canvasH) {
-          if (!confirm(`This region (${cap.width}x${cap.height}) is larger than the canvas (${composer.canvasW}x${composer.canvasH}). Place it anyway?`)) return;
-        }
-        addStickerFromCapture(cap);
-      } else {
-        // Select existing
-        composer.selectedId = cap.id;
-        renderComposer();
+      if (cap.width > composer.canvasW || cap.height > composer.canvasH) {
+        if (!confirm(`This region (${cap.width}x${cap.height}) is larger than the canvas (${composer.canvasW}x${composer.canvasH}). Place it anyway?`)) return;
       }
+      addStickerFromCapture(cap);
     });
 
     strip.appendChild(item);
@@ -453,7 +448,7 @@ function updateFilmstripBadges() {
   const badges = document.querySelectorAll('.filmstrip-item-badge');
   for (const badge of badges) {
     const capId = badge.dataset.capId;
-    const count = composer.stickers.filter(s => s.id === capId).length;
+    const count = composer.stickers.filter(s => s.captureId === capId).length;
     if (count === 0) {
       badge.style.display = 'none';
     } else if (count === 1) {
@@ -508,7 +503,7 @@ function setupComposer() {
 
     const hit = composerHitTest(px, py);
     if (hit) {
-      composer.selectedId = hit.id;
+      composer.selectedId = hit.stickerId;
       composer.dragging = true;
       composer.dragOffX = px - hit.x;
       composer.dragOffY = py - hit.y;
@@ -534,7 +529,7 @@ function setupComposer() {
     const rect = canvas.getBoundingClientRect();
     const px = Math.floor((e.clientX - rect.left) / composer.displayScale);
     const py = Math.floor((e.clientY - rect.top) / composer.displayScale);
-    const sticker = composer.stickers.find(s => s.id === composer.selectedId);
+    const sticker = composer.stickers.find(s => s.stickerId === composer.selectedId);
     if (sticker) {
       sticker.x = composerSnap(px - composer.dragOffX);
       sticker.y = composerSnap(py - composer.dragOffY);
@@ -563,7 +558,7 @@ function setupComposer() {
     if ((e.key === 'Delete' || e.key === 'Backspace') && composer.selectedId) {
       const inInput = document.activeElement?.tagName === 'INPUT';
       if (inInput) return;
-      composer.stickers = composer.stickers.filter(s => s.id !== composer.selectedId);
+      composer.stickers = composer.stickers.filter(s => s.stickerId !== composer.selectedId);
       composer.selectedId = null;
       renderComposer();
       updateFilmstripBadges();
