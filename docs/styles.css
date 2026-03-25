@@ -1850,6 +1850,23 @@ html, body {
   white-space: nowrap;
   width: 100%;
 }
+.filmstrip-item-badge {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: #2a7;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
 .filmstrip-item-delete {
   position: absolute;
   top: 2px;

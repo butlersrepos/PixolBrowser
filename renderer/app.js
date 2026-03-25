@@ -383,6 +383,7 @@ function addStickerFromCapture(capture) {
   });
   composer.selectedId = capture.id;
   renderComposer();
+  updateFilmstripBadges();
 }
 
 function renderFilmstrip() {
@@ -406,6 +407,13 @@ function renderFilmstrip() {
     info.textContent = `${cap.width}x${cap.height}`;
     item.appendChild(info);
 
+    // Placement badge
+    const badge = document.createElement('div');
+    badge.className = 'filmstrip-item-badge';
+    badge.dataset.capId = cap.id;
+    badge.style.display = 'none';
+    item.appendChild(badge);
+
     // Delete button
     const del = document.createElement('button');
     del.className = 'filmstrip-item-delete';
@@ -418,6 +426,7 @@ function renderFilmstrip() {
       updateComposerBadge();
       renderFilmstrip();
       renderComposer();
+      updateFilmstripBadges();
     });
     item.appendChild(del);
 
@@ -437,6 +446,23 @@ function renderFilmstrip() {
     });
 
     strip.appendChild(item);
+  }
+}
+
+function updateFilmstripBadges() {
+  const badges = document.querySelectorAll('.filmstrip-item-badge');
+  for (const badge of badges) {
+    const capId = badge.dataset.capId;
+    const count = composer.stickers.filter(s => s.id === capId).length;
+    if (count === 0) {
+      badge.style.display = 'none';
+    } else if (count === 1) {
+      badge.style.display = '';
+      badge.textContent = '\u2713';
+    } else {
+      badge.style.display = '';
+      badge.textContent = count;
+    }
   }
 }
 
@@ -540,6 +566,7 @@ function setupComposer() {
       composer.stickers = composer.stickers.filter(s => s.id !== composer.selectedId);
       composer.selectedId = null;
       renderComposer();
+      updateFilmstripBadges();
     }
   });
 
@@ -598,6 +625,7 @@ function setupComposer() {
     composer.stickers = [];
     composer.selectedId = null;
     renderComposer();
+    updateFilmstripBadges();
   });
 }
 
