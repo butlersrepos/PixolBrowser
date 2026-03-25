@@ -1752,6 +1752,139 @@ html, body {
   margin-left: 4px;
 }
 
+/* === Sheet Composer === */
+.composer {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.composer.hidden { display: none; }
+.composer-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+  flex-shrink: 0;
+}
+.composer-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-right: 12px;
+}
+.composer-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+.composer-controls select {
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+}
+.composer-controls input[type="number"] {
+  width: 55px;
+}
+.composer-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+.composer-sidebar {
+  width: 160px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.composer-sidebar-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 8px 8px 4px;
+}
+.composer-filmstrip {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.filmstrip-item {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px;
+  cursor: grab;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.filmstrip-item:hover { border-color: var(--accent); }
+.filmstrip-item canvas {
+  image-rendering: pixelated;
+  max-width: 140px;
+  max-height: 80px;
+}
+.filmstrip-item-info {
+  font-size: 9px;
+  color: var(--muted);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+.filmstrip-item-delete {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 14px;
+  height: 14px;
+  border: none;
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.filmstrip-item:hover .filmstrip-item-delete { opacity: 1; }
+.composer-workspace {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: repeating-conic-gradient(#333 0% 25%, #2a2a2a 0% 50%) 0 0 / 20px 20px;
+  padding: 20px;
+}
+#composer-canvas {
+  image-rendering: pixelated;
+  border: 1px solid var(--border);
+  cursor: default;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+
 /* === Tiled Preview === */
 .tile-preview {
   position: fixed;

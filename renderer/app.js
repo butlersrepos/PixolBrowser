@@ -270,6 +270,284 @@ function getVisibleImages() {
   return cachedVisibleImages;
 }
 
+// ===== Sheet Composer =====
+const composer = {
+  open: false,
+  canvasW: 256,
+  canvasH: 256,
+  snap: 16,
+  stickers: [], // { id, imageData, x, y, w, h }
+  selectedId: null,
+  dragging: false,
+  dragOffX: 0,
+  dragOffY: 0,
+  displayScale: 1,
+};
+
+function openComposer() {
+  composer.open = true;
+  document.getElementById('composer').classList.remove('hidden');
+  renderFilmstrip();
+  resizeComposerCanvas();
+  renderComposer();
+}
+
+function closeComposer() {
+  composer.open = false;
+  document.getElementById('composer').classList.add('hidden');
+}
+
+function resizeComposerCanvas() {
+  const canvas = document.getElementById('composer-canvas');
+  // Display at 2x or fit to workspace, whichever is smaller
+  const workspace = canvas.parentElement;
+  const maxW = workspace.clientWidth - 40;
+  const maxH = workspace.clientHeight - 40;
+  const fitScale = Math.min(maxW / composer.canvasW, maxH / composer.canvasH, 3);
+  composer.displayScale = Math.max(1, Math.floor(fitScale));
+  canvas.width = composer.canvasW;
+  canvas.height = composer.canvasH;
+  canvas.style.width = composer.canvasW * composer.displayScale + 'px';
+  canvas.style.height = composer.canvasH * composer.displayScale + 'px';
+}
+
+function renderComposer() {
+  const canvas = document.getElementById('composer-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  // Clear with transparent
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw grid
+  if (composer.snap > 1) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= canvas.width; x += composer.snap) {
+      ctx.beginPath();
+      ctx.moveTo(x + 0.5, 0);
+      ctx.lineTo(x + 0.5, canvas.height);
+      ctx.stroke();
+    }
+    for (let y = 0; y <= canvas.height; y += composer.snap) {
+      ctx.beginPath();
+      ctx.moveTo(0, y + 0.5);
+      ctx.lineTo(canvas.width, y + 0.5);
+      ctx.stroke();
+    }
+  }
+
+  // Draw stickers
+  for (const s of composer.stickers) {
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = s.w;
+    tempCanvas.height = s.h;
+    tempCanvas.getContext('2d').putImageData(s.imageData, 0, 0);
+    ctx.drawImage(tempCanvas, s.x, s.y);
+
+    // Selection highlight
+    if (s.id === composer.selectedId) {
+      ctx.strokeStyle = 'rgba(88, 166, 255, 0.9)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 2]);
+      ctx.strokeRect(s.x - 0.5, s.y - 0.5, s.w + 1, s.h + 1);
+      ctx.setLineDash([]);
+    }
+  }
+}
+
+function composerHitTest(px, py) {
+  // Reverse order = topmost first
+  for (let i = composer.stickers.length - 1; i >= 0; i--) {
+    const s = composer.stickers[i];
+    if (px >= s.x && px < s.x + s.w && py >= s.y && py < s.y + s.h) {
+      return s;
+    }
+  }
+  return null;
+}
+
+function composerSnap(val) {
+  if (composer.snap <= 1) return val;
+  return Math.round(val / composer.snap) * composer.snap;
+}
+
+function addStickerFromCapture(capture) {
+  composer.stickers.push({
+    id: capture.id,
+    imageData: capture.imageData,
+    x: 0,
+    y: 0,
+    w: capture.width,
+    h: capture.height,
+  });
+  composer.selectedId = capture.id;
+  renderComposer();
+}
+
+function renderFilmstrip() {
+  const strip = document.getElementById('composer-filmstrip');
+  strip.innerHTML = '';
+  for (const cap of state.capturedRegions) {
+    const item = document.createElement('div');
+    item.className = 'filmstrip-item';
+    item.title = `${cap.sourceName} (${cap.width}x${cap.height})`;
+
+    // Thumbnail
+    const thumbCanvas = document.createElement('canvas');
+    thumbCanvas.width = cap.width;
+    thumbCanvas.height = cap.height;
+    thumbCanvas.getContext('2d').putImageData(cap.imageData, 0, 0);
+    item.appendChild(thumbCanvas);
+
+    // Info
+    const info = document.createElement('div');
+    info.className = 'filmstrip-item-info';
+    info.textContent = `${cap.width}x${cap.height}`;
+    item.appendChild(info);
+
+    // Delete button
+    const del = document.createElement('button');
+    del.className = 'filmstrip-item-delete';
+    del.textContent = '\u00d7';
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.capturedRegions = state.capturedRegions.filter(c => c.id !== cap.id);
+      composer.stickers = composer.stickers.filter(s => s.id !== cap.id);
+      if (composer.selectedId === cap.id) composer.selectedId = null;
+      updateComposerBadge();
+      renderFilmstrip();
+      renderComposer();
+    });
+    item.appendChild(del);
+
+    // Click to add to canvas (if not already placed)
+    item.addEventListener('click', () => {
+      const alreadyPlaced = composer.stickers.some(s => s.id === cap.id);
+      if (!alreadyPlaced) {
+        addStickerFromCapture(cap);
+      } else {
+        // Select existing
+        composer.selectedId = cap.id;
+        renderComposer();
+      }
+    });
+
+    strip.appendChild(item);
+  }
+}
+
+function setupComposer() {
+  const canvas = document.getElementById('composer-canvas');
+  const wInput = document.getElementById('composer-w');
+  const hInput = document.getElementById('composer-h');
+  const presetSel = document.getElementById('composer-preset');
+  const snapSel = document.getElementById('composer-snap');
+
+  document.getElementById('btn-composer').addEventListener('click', openComposer);
+  document.getElementById('composer-close').addEventListener('click', closeComposer);
+
+  // Canvas size controls
+  function updateCanvasSize() {
+    composer.canvasW = Math.max(1, Math.min(4096, parseInt(wInput.value) || 256));
+    composer.canvasH = Math.max(1, Math.min(4096, parseInt(hInput.value) || 256));
+    wInput.value = composer.canvasW;
+    hInput.value = composer.canvasH;
+    resizeComposerCanvas();
+    renderComposer();
+  }
+  wInput.addEventListener('change', updateCanvasSize);
+  hInput.addEventListener('change', updateCanvasSize);
+  presetSel.addEventListener('change', () => {
+    const v = parseInt(presetSel.value);
+    if (v) {
+      wInput.value = v;
+      hInput.value = v;
+      updateCanvasSize();
+    }
+  });
+  snapSel.addEventListener('change', () => {
+    composer.snap = parseInt(snapSel.value) || 1;
+    renderComposer();
+  });
+
+  // Canvas mouse interactions
+  canvas.addEventListener('mousedown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const px = Math.floor((e.clientX - rect.left) / composer.displayScale);
+    const py = Math.floor((e.clientY - rect.top) / composer.displayScale);
+
+    const hit = composerHitTest(px, py);
+    if (hit) {
+      composer.selectedId = hit.id;
+      composer.dragging = true;
+      composer.dragOffX = px - hit.x;
+      composer.dragOffY = py - hit.y;
+      // Move to top
+      const idx = composer.stickers.indexOf(hit);
+      composer.stickers.splice(idx, 1);
+      composer.stickers.push(hit);
+      canvas.style.cursor = 'grabbing';
+    } else {
+      composer.selectedId = null;
+    }
+    renderComposer();
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!composer.dragging) {
+      const rect = canvas.getBoundingClientRect();
+      const px = Math.floor((e.clientX - rect.left) / composer.displayScale);
+      const py = Math.floor((e.clientY - rect.top) / composer.displayScale);
+      canvas.style.cursor = composerHitTest(px, py) ? 'grab' : 'default';
+      return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    const px = Math.floor((e.clientX - rect.left) / composer.displayScale);
+    const py = Math.floor((e.clientY - rect.top) / composer.displayScale);
+    const sticker = composer.stickers.find(s => s.id === composer.selectedId);
+    if (sticker) {
+      sticker.x = composerSnap(px - composer.dragOffX);
+      sticker.y = composerSnap(py - composer.dragOffY);
+      renderComposer();
+    }
+  });
+
+  canvas.addEventListener('mouseup', () => {
+    if (composer.dragging) {
+      composer.dragging = false;
+      canvas.style.cursor = 'grab';
+    }
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    if (composer.dragging) {
+      composer.dragging = false;
+      canvas.style.cursor = 'default';
+    }
+  });
+
+  // Delete key removes selected sticker
+  document.addEventListener('keydown', (e) => {
+    if (!composer.open) return;
+    if (e.key === 'Escape') { closeComposer(); return; }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && composer.selectedId) {
+      const inInput = document.activeElement?.tagName === 'INPUT';
+      if (inInput) return;
+      composer.stickers = composer.stickers.filter(s => s.id !== composer.selectedId);
+      composer.selectedId = null;
+      renderComposer();
+    }
+  });
+
+  // Clear all
+  document.getElementById('composer-clear').addEventListener('click', () => {
+    composer.stickers = [];
+    composer.selectedId = null;
+    renderComposer();
+  });
+}
+
 // ===== Saved Searches =====
 function saveCurrentView() {
   const name = prompt('Name this saved view:');
@@ -3760,6 +4038,7 @@ async function init() {
   setupRecentImages();
   setupQuickOpen();
   setupFastTooltips();
+  setupComposer();
   document.getElementById('btn-save-view').addEventListener('click', saveCurrentView);
 
   // Apply saved theme

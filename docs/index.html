@@ -349,6 +349,46 @@
     </div>
   </div>
 
+  <!-- Sheet Composer Overlay -->
+  <div id="composer" class="composer hidden">
+    <div class="composer-header">
+      <span class="composer-title">Sheet Composer</span>
+      <div class="composer-controls">
+        <label class="sprite-bar-field">W <input type="number" id="composer-w" min="1" max="4096" value="256" step="1" /></label>
+        <label class="sprite-bar-field">H <input type="number" id="composer-h" min="1" max="4096" value="256" step="1" /></label>
+        <select id="composer-preset" title="Canvas size preset">
+          <option value="">Preset...</option>
+          <option value="128">128x128</option>
+          <option value="256" selected>256x256</option>
+          <option value="512">512x512</option>
+          <option value="1024">1024x1024</option>
+        </select>
+        <div class="sprite-bar-divider"></div>
+        <label class="sprite-bar-field">Snap
+          <select id="composer-snap">
+            <option value="1">Off</option>
+            <option value="8">8px</option>
+            <option value="16" selected>16px</option>
+            <option value="32">32px</option>
+          </select>
+        </label>
+        <div class="sprite-bar-divider"></div>
+        <button id="composer-export" class="btn-sm btn-primary">Export PNG</button>
+        <button id="composer-clear" class="btn-sm btn-secondary">Clear All</button>
+        <button id="composer-close" class="modal-close" title="Close composer">&times;</button>
+      </div>
+    </div>
+    <div class="composer-body">
+      <div class="composer-sidebar">
+        <div class="composer-sidebar-label">Captured Regions</div>
+        <div id="composer-filmstrip" class="composer-filmstrip"></div>
+      </div>
+      <div class="composer-workspace">
+        <canvas id="composer-canvas"></canvas>
+      </div>
+    </div>
+  </div>
+
   <!-- Tiled Preview Overlay -->
   <div id="tile-preview" class="tile-preview hidden">
     <div class="tile-preview-backdrop"></div>
