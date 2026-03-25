@@ -17,6 +17,9 @@
       <div id="search-history" class="search-history hidden"></div>
     </div>
     <div class="toolbar-divider"></div>
+    <button id="btn-composer" class="btn-composer" title="Open sheet composer" style="display:none">
+      Composer <span id="composer-badge" class="composer-badge">0</span>
+    </button>
     <button id="btn-rules" title="Manage auto-tag rules and exclusions">Rules</button>
     <button id="btn-settings" title="Settings">Settings</button>
   </div>
@@ -201,6 +204,7 @@
         <label class="sprite-bar-field">Rows <input type="number" id="sprite-rows" min="1" max="100" value="1" /></label>
         <button id="sprite-grid-clear" class="btn-sm btn-secondary">Clear</button>
         <button id="sprite-export-frame" class="btn-sm btn-primary" style="display:none" title="Export isolated frame as PNG">Export Frame</button>
+        <button id="sprite-capture-frame" class="btn-sm btn-primary" style="display:none" title="Capture frame for sheet composer">Capture Frame</button>
         <div class="sprite-bar-divider"></div>
         <button id="sprite-play" class="btn-sm btn-secondary" title="Play/Pause animation (P)" disabled>&#9654; Play (P)</button>
         <select id="sprite-row-select" class="sprite-row-select" title="Play all rows or a specific row" disabled>
@@ -217,6 +221,7 @@
         <div class="sprite-bar-spacer"></div>
         <button id="region-tile-preview" class="btn-sm btn-primary" style="display:none">Tile Preview</button>
         <button id="region-export" class="btn-sm btn-primary" style="display:none">Export Region</button>
+        <button id="region-capture" class="btn-sm btn-primary" style="display:none" title="Capture region for sheet composer">Capture</button>
         <button id="region-clear" class="btn-sm btn-secondary" style="display:none">Clear</button>
       </div>
       <div id="carousel-image-wrapper">

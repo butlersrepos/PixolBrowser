@@ -1733,6 +1733,25 @@ html, body {
 }
 .search-history-clear:hover { color: var(--text); }
 
+/* === Composer Badge === */
+.btn-composer {
+  position: relative;
+}
+.composer-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: 4px;
+}
+
 /* === Tiled Preview === */
 .tile-preview {
   position: fixed;

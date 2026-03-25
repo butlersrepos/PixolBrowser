@@ -15,6 +15,7 @@ const state = {
   dimFilter: null,     // null = no filter, or { min, max } on max(w,h)
   sortBy: 'name',      // 'name', 'size', 'dimensions', 'modified'
   sortDir: 'asc',      // 'asc' or 'desc'
+  capturedRegions: [], // { imageData, width, height, sourceName, id }
 };
 
 let grid = null;
@@ -1690,6 +1691,7 @@ function regionFinishDraw() {
     document.getElementById('region-clear').style.display = '';
     document.getElementById('region-tile-preview').style.display = '';
     document.getElementById('region-export').style.display = '';
+    document.getElementById('region-capture').style.display = '';
   }
 }
 
@@ -1713,6 +1715,7 @@ function setupRegionSelect() {
       clearBtn.style.display = 'none';
       document.getElementById('region-tile-preview').style.display = 'none';
       document.getElementById('region-export').style.display = 'none';
+      document.getElementById('region-capture').style.display = 'none';
       document.getElementById('region-info').textContent = 'Drag to select a region';
     }
     // Refit image to account for bar height change
@@ -1724,6 +1727,7 @@ function setupRegionSelect() {
     clearBtn.style.display = 'none';
     document.getElementById('region-tile-preview').style.display = 'none';
     document.getElementById('region-export').style.display = 'none';
+    document.getElementById('region-capture').style.display = 'none';
     document.getElementById('region-info').textContent = 'Drag to select a region';
     drawRegionOverlay();
   });
@@ -1999,9 +2003,84 @@ function exportRegion() {
   }, 'image/png');
 }
 
+function captureFrame() {
+  const img = document.getElementById('carousel-image');
+  if (!img.naturalWidth || !spriteGrid.isolated) return;
+
+  const cols = spriteGrid.cols;
+  const rows = spriteGrid.rows;
+  const frameW = img.naturalWidth / cols;
+  const frameH = img.naturalHeight / rows;
+  const col = spriteGrid.isolatedFrame % cols;
+  const row = Math.floor(spriteGrid.isolatedFrame / cols);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = frameW;
+  canvas.height = frameH;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, col * frameW, row * frameH, frameW, frameH, 0, 0, frameW, frameH);
+
+  const imageData = ctx.getImageData(0, 0, frameW, frameH);
+  const sourceName = basename(carousel.items[carousel.currentIndex]);
+
+  state.capturedRegions.push({
+    imageData,
+    width: frameW,
+    height: frameH,
+    sourceName: `${sourceName} [frame ${spriteGrid.isolatedFrame + 1}]`,
+    id: Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+  });
+
+  updateComposerBadge();
+
+  const btn = document.getElementById('sprite-capture-frame');
+  btn.textContent = 'Captured!';
+  setTimeout(() => { btn.textContent = 'Capture Frame'; }, 1200);
+}
+
+function captureRegion() {
+  const img = document.getElementById('carousel-image');
+  const r = regionSelect.region;
+  if (!img.naturalWidth || !r || r.w <= 0 || r.h <= 0) return;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = r.w;
+  canvas.height = r.h;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+
+  const imageData = ctx.getImageData(0, 0, r.w, r.h);
+  const sourceName = basename(carousel.items[carousel.currentIndex]);
+
+  state.capturedRegions.push({
+    imageData,
+    width: r.w,
+    height: r.h,
+    sourceName,
+    id: Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+  });
+
+  updateComposerBadge();
+
+  const btn = document.getElementById('region-capture');
+  btn.textContent = 'Captured!';
+  setTimeout(() => { btn.textContent = 'Capture'; }, 1200);
+}
+
+function updateComposerBadge() {
+  const count = state.capturedRegions.length;
+  const badge = document.getElementById('composer-badge');
+  const btn = document.getElementById('btn-composer');
+  badge.textContent = count;
+  btn.style.display = count > 0 ? '' : 'none';
+}
+
 function setupTilePreview() {
   document.getElementById('region-tile-preview').addEventListener('click', showTilePreview);
   document.getElementById('region-export').addEventListener('click', exportRegion);
+  document.getElementById('region-capture').addEventListener('click', captureRegion);
   document.getElementById('tile-preview-close').addEventListener('click', hideTilePreview);
   document.getElementById('tile-preview').querySelector('.tile-preview-backdrop').addEventListener('click', hideTilePreview);
 
@@ -2225,6 +2304,7 @@ function spriteIsolateFrame(frameIdx) {
   spriteGrid.isolatedFrame = frameIdx;
   if (spriteGrid.playing) spriteAnimStop();
   document.getElementById('sprite-export-frame').style.display = '';
+  document.getElementById('sprite-capture-frame').style.display = '';
 
   const frameW = img.naturalWidth / cols;
   const frameH = img.naturalHeight / rows;
@@ -2265,6 +2345,7 @@ function spriteExitIsolation() {
   spriteGrid.isolated = false;
   document.getElementById('carousel-image').style.visibility = '';
   document.getElementById('sprite-export-frame').style.display = 'none';
+  document.getElementById('sprite-capture-frame').style.display = 'none';
   const backBtn = document.getElementById('sprite-back-btn');
   if (backBtn) backBtn.style.display = 'none';
   drawGridOverlay();
@@ -2461,6 +2542,7 @@ function setupSpriteGrid() {
 
   // Export frame button
   document.getElementById('sprite-export-frame').addEventListener('click', spriteExportFrame);
+  document.getElementById('sprite-capture-frame').addEventListener('click', captureFrame);
 }
 
 function setupCarousel() {
