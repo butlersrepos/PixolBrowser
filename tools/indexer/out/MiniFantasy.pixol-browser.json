@@ -1,0 +1,905 @@
+{
+  "autoTagRules": [
+    {
+      "pattern": "**/creatures/**",
+      "tags": [
+        "creature"
+      ]
+    },
+    {
+      "pattern": "**/monsters/**",
+      "tags": [
+        "creature",
+        "monster"
+      ]
+    },
+    {
+      "pattern": "**/heroes/**",
+      "tags": [
+        "character",
+        "hero"
+      ]
+    },
+    {
+      "pattern": "**/weapons/**",
+      "tags": [
+        "weapon"
+      ]
+    },
+    {
+      "pattern": "**/effects/**",
+      "tags": [
+        "vfx"
+      ]
+    },
+    {
+      "pattern": "**/cursors/**",
+      "tags": [
+        "ui",
+        "cursor"
+      ]
+    },
+    {
+      "pattern": "**/icons/**",
+      "tags": [
+        "ui",
+        "icon"
+      ]
+    },
+    {
+      "pattern": "**/bars/**",
+      "tags": [
+        "ui",
+        "bar"
+      ]
+    },
+    {
+      "pattern": "**gui**",
+      "tags": [
+        "ui"
+      ]
+    },
+    {
+      "pattern": "**portrait**",
+      "tags": [
+        "portrait"
+      ]
+    },
+    {
+      "pattern": "**/spell_effects/**",
+      "tags": [
+        "spell-effect",
+        "vfx"
+      ]
+    },
+    {
+      "pattern": "**/tileable_effect/**",
+      "tags": [
+        "spell-effect",
+        "vfx",
+        "tileable"
+      ]
+    },
+    {
+      "pattern": "**/burst/**",
+      "tags": [
+        "spell-effect",
+        "vfx",
+        "burst"
+      ]
+    },
+    {
+      "pattern": "**/aura/**",
+      "tags": [
+        "spell-effect",
+        "vfx",
+        "aura"
+      ]
+    },
+    {
+      "pattern": "**/impact/**",
+      "tags": [
+        "spell-effect",
+        "vfx",
+        "impact"
+      ]
+    },
+    {
+      "pattern": "**/projectile*/**",
+      "tags": [
+        "spell-effect",
+        "vfx",
+        "projectile"
+      ]
+    },
+    {
+      "pattern": "**/tileset*/**",
+      "tags": [
+        "tileset",
+        "terrain"
+      ]
+    },
+    {
+      "pattern": "**tileset**",
+      "tags": [
+        "tileset",
+        "terrain"
+      ]
+    },
+    {
+      "pattern": "**/tiles/**",
+      "tags": [
+        "tileset",
+        "terrain"
+      ]
+    },
+    {
+      "pattern": "**autotile**",
+      "tags": [
+        "tileset",
+        "terrain",
+        "autotile"
+      ]
+    },
+    {
+      "pattern": "**/animated_props/**",
+      "tags": [
+        "prop",
+        "animated"
+      ]
+    },
+    {
+      "pattern": "**/props/**",
+      "tags": [
+        "prop"
+      ]
+    },
+    {
+      "pattern": "**/furniture/**",
+      "tags": [
+        "prop",
+        "furniture"
+      ]
+    },
+    {
+      "pattern": "**/decorations/**",
+      "tags": [
+        "prop",
+        "decoration"
+      ]
+    },
+    {
+      "pattern": "**/buildings/**",
+      "tags": [
+        "building"
+      ]
+    },
+    {
+      "pattern": "**house**",
+      "tags": [
+        "building",
+        "house"
+      ]
+    },
+    {
+      "pattern": "**/characters/**",
+      "tags": [
+        "character"
+      ]
+    },
+    {
+      "pattern": "**/npcs/**",
+      "tags": [
+        "character",
+        "npc"
+      ]
+    },
+    {
+      "pattern": "**/base_humanoids/**",
+      "tags": [
+        "creature",
+        "humanoid"
+      ]
+    },
+    {
+      "pattern": "**/special_animations/**",
+      "tags": [
+        "animation",
+        "special"
+      ]
+    },
+    {
+      "pattern": "**/general_animations/**",
+      "tags": [
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**idle**",
+      "tags": [
+        "idle",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**walk**",
+      "tags": [
+        "walk",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**run**",
+      "tags": [
+        "run",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**jump**",
+      "tags": [
+        "jump",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**charged**",
+      "tags": [
+        "charged",
+        "attack",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**attack**",
+      "tags": [
+        "attack",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**dmg**",
+      "tags": [
+        "damage",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**hurt**",
+      "tags": [
+        "damage",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**death**",
+      "tags": [
+        "death",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**die**",
+      "tags": [
+        "death",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**dodge**",
+      "tags": [
+        "dodge",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**cast**",
+      "tags": [
+        "cast",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**special**",
+      "tags": [
+        "special",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**sleep**",
+      "tags": [
+        "sleep",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**crawl**",
+      "tags": [
+        "crawl",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**throw**",
+      "tags": [
+        "throw",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**root**",
+      "tags": [
+        "root",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**summon**",
+      "tags": [
+        "summon",
+        "animation"
+      ]
+    },
+    {
+      "pattern": "**/fire/**",
+      "tags": [
+        "fire",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**_fire**",
+      "tags": [
+        "fire",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**/ice/**",
+      "tags": [
+        "ice",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**_ice**",
+      "tags": [
+        "ice",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**/frost/**",
+      "tags": [
+        "ice",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**_frost**",
+      "tags": [
+        "ice",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**/poison/**",
+      "tags": [
+        "poison",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**_poison**",
+      "tags": [
+        "poison",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**/venom/**",
+      "tags": [
+        "poison",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**_venom**",
+      "tags": [
+        "poison",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**/blight/**",
+      "tags": [
+        "poison",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**_blight**",
+      "tags": [
+        "poison",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**/electric/**",
+      "tags": [
+        "electric",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**_electric**",
+      "tags": [
+        "electric",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**/lightning/**",
+      "tags": [
+        "electric",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**_lightning**",
+      "tags": [
+        "electric",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**/holy/**",
+      "tags": [
+        "holy",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**_holy**",
+      "tags": [
+        "holy",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**/divine/**",
+      "tags": [
+        "divine",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**_divine**",
+      "tags": [
+        "divine",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**/arcane/**",
+      "tags": [
+        "arcane",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**_arcane**",
+      "tags": [
+        "arcane",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**/nature/**",
+      "tags": [
+        "nature",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**_nature**",
+      "tags": [
+        "nature",
+        "element"
+      ]
+    },
+    {
+      "pattern": "**explosion**",
+      "tags": [
+        "explosion",
+        "vfx"
+      ]
+    },
+    {
+      "pattern": "**nova**",
+      "tags": [
+        "nova",
+        "vfx"
+      ]
+    },
+    {
+      "pattern": "**beam**",
+      "tags": [
+        "beam",
+        "vfx"
+      ]
+    },
+    {
+      "pattern": "**smoke**",
+      "tags": [
+        "smoke",
+        "vfx"
+      ]
+    },
+    {
+      "pattern": "**/human/**",
+      "tags": [
+        "human",
+        "race"
+      ]
+    },
+    {
+      "pattern": "**/elf/**",
+      "tags": [
+        "elf",
+        "race"
+      ]
+    },
+    {
+      "pattern": "**/orc/**",
+      "tags": [
+        "orc",
+        "race"
+      ]
+    },
+    {
+      "pattern": "**/dwarf/**",
+      "tags": [
+        "dwarf",
+        "race"
+      ]
+    },
+    {
+      "pattern": "**/goblin/**",
+      "tags": [
+        "goblin",
+        "race"
+      ]
+    },
+    {
+      "pattern": "**/halfling/**",
+      "tags": [
+        "halfling",
+        "race"
+      ]
+    },
+    {
+      "pattern": "**/undead/**",
+      "tags": [
+        "undead",
+        "race"
+      ]
+    },
+    {
+      "pattern": "**/skeleton/**",
+      "tags": [
+        "skeleton",
+        "race"
+      ]
+    },
+    {
+      "pattern": "**/zombie/**",
+      "tags": [
+        "zombie",
+        "race"
+      ]
+    },
+    {
+      "pattern": "**/dragon/**",
+      "tags": [
+        "dragon",
+        "creature-type"
+      ]
+    },
+    {
+      "pattern": "**/spider/**",
+      "tags": [
+        "spider",
+        "creature-type"
+      ]
+    },
+    {
+      "pattern": "**/troll/**",
+      "tags": [
+        "troll",
+        "creature-type"
+      ]
+    },
+    {
+      "pattern": "**/bear/**",
+      "tags": [
+        "bear",
+        "creature-type"
+      ]
+    },
+    {
+      "pattern": "**/gorilla/**",
+      "tags": [
+        "gorilla",
+        "creature-type"
+      ]
+    },
+    {
+      "pattern": "**/beholder/**",
+      "tags": [
+        "beholder",
+        "creature-type"
+      ]
+    },
+    {
+      "pattern": "**/snake/**",
+      "tags": [
+        "snake",
+        "creature-type"
+      ]
+    },
+    {
+      "pattern": "**/wolf/**",
+      "tags": [
+        "wolf",
+        "creature-type"
+      ]
+    },
+    {
+      "pattern": "**/demon/**",
+      "tags": [
+        "demon",
+        "creature-type"
+      ]
+    },
+    {
+      "pattern": "**/angel/**",
+      "tags": [
+        "angel",
+        "creature-type"
+      ]
+    },
+    {
+      "pattern": "**/mage/**",
+      "tags": [
+        "mage",
+        "class"
+      ]
+    },
+    {
+      "pattern": "**/druid/**",
+      "tags": [
+        "druid",
+        "class"
+      ]
+    },
+    {
+      "pattern": "**/rogue/**",
+      "tags": [
+        "rogue",
+        "class"
+      ]
+    },
+    {
+      "pattern": "**/barbarian/**",
+      "tags": [
+        "barbarian",
+        "class"
+      ]
+    },
+    {
+      "pattern": "**/paladin/**",
+      "tags": [
+        "paladin",
+        "class"
+      ]
+    },
+    {
+      "pattern": "**/knight/**",
+      "tags": [
+        "knight",
+        "class"
+      ]
+    },
+    {
+      "pattern": "**/warrior/**",
+      "tags": [
+        "warrior",
+        "class"
+      ]
+    },
+    {
+      "pattern": "**/archer/**",
+      "tags": [
+        "archer",
+        "class"
+      ]
+    },
+    {
+      "pattern": "**/marksman/**",
+      "tags": [
+        "marksman",
+        "class"
+      ]
+    },
+    {
+      "pattern": "**/shaman/**",
+      "tags": [
+        "shaman",
+        "class"
+      ]
+    },
+    {
+      "pattern": "**_blue**",
+      "tags": [
+        "blue",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_red**",
+      "tags": [
+        "red",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_green**",
+      "tags": [
+        "green",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_black**",
+      "tags": [
+        "black",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_white**",
+      "tags": [
+        "white",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_turquoise**",
+      "tags": [
+        "turquoise",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_purple**",
+      "tags": [
+        "purple",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_orange**",
+      "tags": [
+        "orange",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_yellow**",
+      "tags": [
+        "yellow",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_magenta**",
+      "tags": [
+        "magenta",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_lime**",
+      "tags": [
+        "lime",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_grey**",
+      "tags": [
+        "grey",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_pink**",
+      "tags": [
+        "pink",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_brown**",
+      "tags": [
+        "brown",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_blonde**",
+      "tags": [
+        "blonde",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_whiteleather**",
+      "tags": [
+        "whiteleather",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_brownleather**",
+      "tags": [
+        "brownleather",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_blackleather**",
+      "tags": [
+        "blackleather",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**_gray**",
+      "tags": [
+        "grey",
+        "variant"
+      ]
+    },
+    {
+      "pattern": "**diagonal**",
+      "tags": [
+        "diagonal",
+        "direction"
+      ]
+    },
+    {
+      "pattern": "**orthogonal**",
+      "tags": [
+        "orthogonal",
+        "direction"
+      ]
+    },
+    {
+      "pattern": "**animated**",
+      "tags": [
+        "animated"
+      ]
+    }
+  ],
+  "excludePatterns": [
+    "**shadow**",
+    "**mockup**",
+    "**sample**",
+    "**guideline**"
+  ],
+  "excludedFiles": [],
+  "tags": {}
+}
