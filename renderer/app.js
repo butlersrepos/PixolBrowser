@@ -121,6 +121,7 @@ class VirtualGrid {
   }
 
   setItems(items) {
+    galleryHoverPreview?.hide();
     this.items = items;
     this.scrollEl.scrollTop = 0;
     // Clear all rendered cells
@@ -132,6 +133,7 @@ class VirtualGrid {
   }
 
   refreshCell(index) {
+    galleryHoverPreview?.hide();
     const el = this.renderedCells.get(index);
     if (el) {
       const newEl = el.cloneNode(false);
@@ -176,6 +178,7 @@ class VirtualGrid {
     // Remove cells no longer visible
     for (const [idx, el] of this.renderedCells) {
       if (!visible.has(idx)) {
+        galleryHoverPreview?.hide();
         el.remove();
         this.renderedCells.delete(idx);
       }
@@ -1562,6 +1565,277 @@ function scheduleSave() {
   }, 500);
 }
 
+// ===== Gallery Sprite Hover Preview =====
+const SPRITE_HOVER_DELAY = 450;
+const SPRITE_DETECTION_MAX_PIXELS = 4 * 1024 * 1024;
+const SPRITE_DETECTION_CACHE_SIZE = 128;
+let galleryHoverPreview = null;
+
+function validSpriteLayout(width, height, config) {
+  if (!config || !Number.isInteger(config.cols) || !Number.isInteger(config.rows)) return null;
+  const { cols, rows } = config;
+  if (cols < 1 || rows < 1 || width % cols || height % rows || cols > width || rows > height) return null;
+  return { cols, rows, frameWidth: width / cols, frameHeight: height / rows };
+}
+
+// Require repeated occupied slots separated by transparency. Dimensions alone
+// cannot distinguish a sprite sheet from an ordinary rectangular image.
+function detectSpriteAxis(occupied) {
+  const length = occupied.length;
+  for (let size = 8; size <= Math.min(512, length / 2); size++) {
+    if (length % size) continue;
+    const count = length / size;
+    if (count > 64) continue;
+    let filled = 0;
+    let separated = true;
+    for (let slot = 0; slot < count; slot++) {
+      const start = slot * size;
+      if (start && occupied[start - 1] && occupied[start]) { separated = false; break; }
+      let first = -1;
+      let last = -1;
+      for (let offset = 0; offset < size; offset++) {
+        if (occupied[start + offset]) {
+          if (first < 0) first = offset;
+          last = offset;
+        }
+      }
+      if (first >= 0) {
+        // A nearly empty sliver is weak evidence for a complete frame.
+        if (last - first + 1 < Math.max(2, size * 0.08)) { separated = false; break; }
+        filled++;
+      }
+    }
+    if (separated && filled >= Math.max(2, Math.ceil(count * 0.75))) return size;
+  }
+  return length;
+}
+
+function detectSpriteLayout(width, height, imagePath, readPixels) {
+  const name = basename(imagePath).toLowerCase();
+  // Animated image formats already play natively; never slice their first frame.
+  if (/\.(gif|webp)$/i.test(name)) return null;
+  const words = basename(imagePath).replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+  const animationHint = /(?:^|[^a-z])(?:anim(?:ation|ations|ated)?|walk(?:ing)?|idle|run(?:ning)?|attack(?:ing)?|cast(?:ing)?|jump(?:ing)?|death|die|dying|hurt|hit|slash|thrust|shoot(?:ing)?|swing|sleep(?:ing)?)(?:$|[^a-z])/.test(words);
+  if (!animationHint && /tiles?|terrain|icons?|font|palette|atlas|mockup|portrait/.test(name)) return null;
+
+  // Explicit frame dimensions in the filename are stronger than pixel inference.
+  for (const match of name.matchAll(/(?:^|[^\d])(\d{1,4})\s*[x×]\s*(\d{1,4})(?!\d)/g)) {
+    const frameWidth = Number(match[1]);
+    const frameHeight = Number(match[2]);
+    if (!frameWidth || !frameHeight) continue;
+    const layout = validSpriteLayout(width, height, { cols: width / frameWidth, rows: height / frameHeight });
+    if (layout && layout.cols * layout.rows > 1) return { ...layout, source: 'Filename' };
+  }
+
+  if (width * height <= SPRITE_DETECTION_MAX_PIXELS) {
+    const pixels = readPixels();
+    const occupiedX = new Uint8Array(width);
+    const occupiedY = new Uint8Array(height);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (pixels[(y * width + x) * 4 + 3] > 8) {
+          occupiedX[x] = 1;
+          occupiedY[y] = 1;
+        }
+      }
+    }
+    const frameWidth = detectSpriteAxis(occupiedX);
+    const frameHeight = detectSpriteAxis(occupiedY);
+    const layout = validSpriteLayout(width, height, { cols: width / frameWidth, rows: height / frameHeight });
+    if (layout && layout.cols * layout.rows > 1 && layout.cols * layout.rows <= 256) {
+      // Reject sparse atlases: projections can look regular even when most
+      // actual cells are empty. Keep blank trailing frames in playback.
+      const filled = new Uint8Array(layout.cols * layout.rows);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          if (pixels[(y * width + x) * 4 + 3] > 8) {
+            filled[Math.floor(y / frameHeight) * layout.cols + Math.floor(x / frameWidth)] = 1;
+          }
+        }
+      }
+      if (filled.reduce((sum, value) => sum + value, 0) >= Math.ceil(filled.length * 0.75)) {
+        return { ...layout, source: 'Detected' };
+      }
+    }
+  }
+
+  // An animation-named strip can have opaque frames and no transparent gutters.
+  if (animationHint && width !== height) {
+    const size = Math.min(width, height);
+    const count = Math.max(width, height) / size;
+    if (size >= 8 && size <= 512 && Number.isInteger(count) && count <= 64) {
+      return { ...validSpriteLayout(width, height, { cols: width / size, rows: height / size }), source: 'Detected' };
+    }
+  }
+  return null;
+}
+
+function spriteFrameRect(layout, frame) {
+  return [(frame % layout.cols) * layout.frameWidth,
+    Math.floor(frame / layout.cols) * layout.frameHeight, layout.frameWidth, layout.frameHeight];
+}
+
+function setupGalleryHoverPreview() {
+  const container = document.getElementById('grid-container');
+  const tip = document.createElement('div');
+  tip.id = 'sprite-hover-preview';
+  tip.className = 'sprite-hover-preview hidden';
+  tip.setAttribute('role', 'tooltip');
+  tip.innerHTML = '<div class="sprite-hover-stage bg-checker"><canvas></canvas><img alt="" /></div>' +
+    '<div class="sprite-hover-name"></div><div class="sprite-hover-info"></div><div class="sprite-hover-hint"></div>';
+  document.body.appendChild(tip);
+  const canvas = tip.querySelector('canvas');
+  const nativeImage = tip.querySelector('img');
+  const nameEl = tip.querySelector('.sprite-hover-name');
+  const infoEl = tip.querySelector('.sprite-hover-info');
+  const hintEl = tip.querySelector('.sprite-hover-hint');
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const cache = new Map();
+  let active = null;
+  let dismissedCell = null;
+  let delayTimer = null;
+  let animationTimer = null;
+
+  function hide() {
+    clearTimeout(delayTimer);
+    clearTimeout(animationTimer);
+    delayTimer = animationTimer = null;
+    active = null; // Also invalidates an outstanding image.decode().
+    tip.classList.add('hidden');
+    nativeImage.removeAttribute('src');
+    canvas.width = canvas.height = 0;
+  }
+
+  function dismiss(event) {
+    if (tip.contains(event.target)) return;
+    // A click must stay dismissed despite small pointer movements over the
+    // same cell. Leaving that cell permits a fresh hover preview.
+    dismissedCell = event.target.closest('.grid-cell') || active?.cell || dismissedCell;
+    hide();
+  }
+
+  function position(cell) {
+    const rect = cell.getBoundingClientRect();
+    const margin = 12;
+    let left = rect.right + margin;
+    if (left + tip.offsetWidth > window.innerWidth - margin) left = rect.left - tip.offsetWidth - margin;
+    tip.style.left = Math.max(margin, Math.min(left, window.innerWidth - tip.offsetWidth - margin)) + 'px';
+    tip.style.top = Math.max(margin, Math.min(rect.top, window.innerHeight - tip.offsetHeight - margin)) + 'px';
+  }
+
+  async function show(request) {
+    const { cell, path } = request;
+    const img = cell.querySelector('.cell-image-wrapper img');
+    try {
+      if (!img) return;
+      await img.decode();
+      if (active !== request || !cell.isConnected || document.hidden) return;
+      if (document.querySelector('.modal:not(.hidden), .carousel:not(.hidden), .composer:not(.hidden), #quick-open:not(.hidden), #scan-overlay:not(.hidden)')) {
+        hide();
+        return;
+      }
+      const width = img.naturalWidth;
+      const height = img.naturalHeight;
+      const saved = getSpriteConfig(path);
+      let layout = validSpriteLayout(width, height, saved);
+      if (layout) layout.source = 'Saved grid';
+      // A saved 1x1 grid is an explicit static-image override.
+      if (!saved) {
+        const key = JSON.stringify([path, img.currentSrc || img.src, width, height]);
+        if (!cache.has(key)) {
+          let detected = null;
+          try {
+            detected = detectSpriteLayout(width, height, path, () => {
+              const scratch = document.createElement('canvas');
+              scratch.width = width;
+              scratch.height = height;
+              const ctx = scratch.getContext('2d', { willReadFrequently: true });
+              ctx.drawImage(img, 0, 0);
+              return ctx.getImageData(0, 0, width, height).data;
+            });
+          } catch { /* Unsupported pixel reads fall back to an intact image. */ }
+          if (cache.size >= SPRITE_DETECTION_CACHE_SIZE) cache.delete(cache.keys().next().value);
+          cache.set(key, detected);
+        }
+        layout = cache.get(key);
+      }
+      const animated = layout && layout.cols * layout.rows > 1;
+      const frameWidth = animated ? layout.frameWidth : width;
+      const frameHeight = animated ? layout.frameHeight : height;
+      const fit = Math.min(224 / frameWidth, 192 / frameHeight);
+      const scale = fit >= 1 ? Math.min(8, Math.floor(fit)) : fit;
+      const displayWidth = Math.max(1, Math.round(frameWidth * scale));
+      const displayHeight = Math.max(1, Math.round(frameHeight * scale));
+      nameEl.textContent = basename(path);
+      hintEl.textContent = animated ? `${layout.source} · ${layout.cols} columns × ${layout.rows} rows` :
+        'Double-click → Frames to set the grid';
+      const nativePlayback = !saved && /\.(gif|webp)$/i.test(path) && !reducedMotion.matches;
+      canvas.hidden = nativePlayback;
+      nativeImage.hidden = !nativePlayback;
+      const surface = nativePlayback ? nativeImage : canvas;
+      surface.style.width = displayWidth + 'px';
+      surface.style.height = displayHeight + 'px';
+      if (nativePlayback) {
+        nativeImage.src = img.currentSrc || img.src;
+        infoEl.textContent = `${width} × ${height} px · Original image`;
+        hintEl.textContent = 'Double-click to inspect';
+      } else {
+        canvas.width = displayWidth;
+        canvas.height = displayHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+        const total = animated ? layout.cols * layout.rows : 1;
+        const configuredTime = Number(state.metadata?.defaultFrameTime) || 200;
+        const frameTime = Math.max(16, Math.min(2000, configuredTime));
+        let frame = 0;
+        function draw() {
+          if (active !== request || !cell.isConnected || document.hidden) { hide(); return; }
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          const rect = animated ? spriteFrameRect(layout, frame) : [0, 0, width, height];
+          ctx.drawImage(img, ...rect, 0, 0, canvas.width, canvas.height);
+          infoEl.textContent = animated ?
+            `Frame ${frame + 1} / ${total} · ${frameWidth} × ${frameHeight} px${reducedMotion.matches ? ' · Paused' : ''}` :
+            `${width} × ${height} px · Static preview`;
+          frame = (frame + 1) % total;
+          if (animated && !reducedMotion.matches) animationTimer = setTimeout(draw, frameTime);
+        }
+        draw();
+      }
+      tip.classList.remove('hidden');
+      position(cell);
+    } catch {
+      if (active === request) hide();
+    }
+  }
+
+  function hover(event) {
+    if (event.pointerType === 'touch' || event.buttons || document.hidden) return;
+    if (event.target.closest('.cell-tag-dot')) { hide(); return; }
+    const cell = event.target.closest('.grid-cell');
+    if (dismissedCell && dismissedCell !== cell) dismissedCell = null;
+    if (!cell || cell === dismissedCell || active?.cell === cell) return;
+    hide();
+    const request = { cell, path: cell.dataset.imagePath };
+    active = request;
+    delayTimer = setTimeout(() => show(request), SPRITE_HOVER_DELAY);
+  }
+  container.addEventListener('pointerover', hover);
+  container.addEventListener('pointermove', hover);
+  container.addEventListener('pointerout', event => {
+    if (dismissedCell && !dismissedCell.contains(event.relatedTarget)) dismissedCell = null;
+    if (active && !active.cell.contains(event.relatedTarget)) hide();
+  });
+  document.addEventListener('scroll', hide, true);
+  document.addEventListener('pointerdown', dismiss, true);
+  document.addEventListener('click', dismiss, true);
+  document.addEventListener('keydown', hide, true);
+  document.addEventListener('visibilitychange', hide);
+  window.addEventListener('blur', hide);
+  window.addEventListener('resize', hide);
+  reducedMotion.addEventListener('change', hide);
+  return { hide, clearCache: () => { hide(); cache.clear(); } };
+}
+
 // ===== Fast Tooltips (400ms) =====
 function setupFastTooltips() {
   const tip = document.getElementById('custom-tooltip');
@@ -1569,6 +1843,7 @@ function setupFastTooltips() {
   let activeEl = null;
 
   document.addEventListener('mouseover', (e) => {
+    if (e.target.closest('.cell-filename')) return;
     const el = e.target.closest('[title]');
     if (!el || el === activeEl) return;
     clearTimeout(timer);
@@ -3203,6 +3478,7 @@ function setupBgModeBar(barId, wrapperId, colorInputId, persistKey) {
 
 // ===== Cell Rendering =====
 function renderCell(cell, imagePath, index) {
+  cell.dataset.imagePath = imagePath;
   const tags = getTagsForImage(imagePath);
   if (state.selectedImages.has(imagePath)) cell.classList.add('selected');
 
@@ -3985,6 +4261,8 @@ async function init() {
     },
   });
 
+  galleryHoverPreview = setupGalleryHoverPreview();
+
   // Click on empty gallery space to deselect
   document.getElementById('grid-container').addEventListener('click', (e) => {
     if (e.target.closest('.grid-cell')) return;
@@ -4422,6 +4700,7 @@ function setupOpenModal() {
 }
 
 async function scanDirectory(dirPath, recursive) {
+  galleryHoverPreview?.clearCache();
   // Show scan overlay
   const overlay = document.getElementById('scan-overlay');
   const scanText = document.getElementById('scan-text');

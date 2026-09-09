@@ -2036,6 +2036,53 @@ html, body {
   text-align: left;
 }
 
+/* === Gallery sprite hover preview === */
+.sprite-hover-preview {
+  position: fixed;
+  z-index: 9998;
+  width: 250px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  overflow: hidden;
+  pointer-events: none;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+.sprite-hover-stage {
+  height: 192px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+.sprite-hover-stage canvas,
+.sprite-hover-stage img {
+  flex-shrink: 0;
+  image-rendering: pixelated;
+  object-fit: contain;
+}
+.sprite-hover-name {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sprite-hover-info,
+.sprite-hover-hint {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  margin-top: 4px;
+}
+
 /* === Fast Tooltips (400ms) === */
 .tooltip-host { position: relative; }
 #custom-tooltip {
