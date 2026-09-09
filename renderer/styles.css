@@ -2037,6 +2037,7 @@ html, body {
 }
 
 /* === Gallery sprite hover preview === */
+.sprite-hover-preview.hidden { display: none; }
 .sprite-hover-preview {
   position: fixed;
   z-index: 9998;

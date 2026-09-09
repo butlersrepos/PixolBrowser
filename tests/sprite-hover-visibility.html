@@ -1,0 +1,65 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprite hover visibility regression</title>
+<!-- Serve the repository with python3 -m http.server, then open
+     /tests/sprite-hover-visibility.html. Exercises the real app and CSS. -->
+<pre id="result">Running…</pre>
+<iframe id="app" src="../docs/index.html" width="1400" height="900" title="App under test"></iframe>
+<script>
+const frame = document.getElementById('app');
+const result = document.getElementById('result');
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+const assert = (condition, message) => { if (!condition) throw new Error(message); };
+frame.addEventListener('load', async () => {
+  try {
+    const win = frame.contentWindow;
+    const doc = win.document;
+    for (let attempt = 0; !win.eval('galleryHoverPreview') && attempt < 40; attempt++) await pause(50);
+    assert(win.eval('galleryHoverPreview'), 'App failed to initialize');
+    win.eval(`
+      const fixture = document.createElement('canvas');
+      fixture.width = 64; fixture.height = 32;
+      const ctx = fixture.getContext('2d');
+      ctx.fillStyle = 'red'; ctx.fillRect(4, 4, 24, 24);
+      ctx.fillStyle = 'blue'; ctx.fillRect(36, 4, 24, 24);
+      window._blobUrls.set('walk_32x32.png', fixture.toDataURL());
+      state.allImages = ['walk_32x32.png'];
+      state.filteredImages = state.allImages;
+      removeEmptyState(); grid.setItems(state.allImages);
+    `);
+    const cell = doc.querySelector('.grid-cell');
+    await cell.querySelector('img').decode();
+    const tip = doc.getElementById('sprite-hover-preview');
+    const emptyGallery = doc.querySelector('.virtual-grid-scroll');
+    // Checking classList alone missed the original bug: hidden had no CSS rule.
+    const visible = () => tip.getClientRects().length > 0 && win.getComputedStyle(tip).display !== 'none';
+    const enter = () => cell.dispatchEvent(new win.PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }));
+    const leave = () => cell.dispatchEvent(new win.PointerEvent('pointerout', { bubbles: true, relatedTarget: emptyGallery }));
+    const checks = [];
+    for (const theme of ['Light', 'Dark (Default)']) {
+      win.eval(`applyTheme(builtInThemes[${JSON.stringify(theme)}])`);
+      assert(!visible(), `${theme}: preview is visible before hovering`);
+      enter(); await pause(550);
+      assert(visible(), `${theme}: hover did not show preview`);
+      // Empty space in the main content container, matching the reported click.
+      emptyGallery.dispatchEvent(new win.PointerEvent('pointerdown', { bubbles: true }));
+      emptyGallery.click();
+      assert(!visible(), `${theme}: outside click left the empty tooltip visible`);
+      assert(tip.querySelector('canvas').width === 0, `${theme}: canvas was not released`);
+      cell.dispatchEvent(new win.PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' }));
+      await pause(550);
+      assert(!visible(), `${theme}: dismissed preview reopened on small mouse movement`);
+      leave(); enter(); await pause(550);
+      assert(visible(), `${theme}: re-entry did not show a new preview`);
+      leave();
+      assert(!visible(), `${theme}: pointer leave did not visually hide preview`);
+      checks.push(`${theme}: initial visibility, hover, outside click, cleanup, dismissal persistence, re-entry, pointer leave`);
+    }
+    result.textContent = 'PASS\n' + checks.join('\n');
+    result.dataset.status = 'passed';
+  } catch (error) {
+    result.textContent = 'FAIL: ' + error.message;
+    result.dataset.status = 'failed';
+  }
+});
+</script>
