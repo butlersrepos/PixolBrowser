@@ -20,6 +20,7 @@ const state = {
 
 let grid = null;
 let saveTimeout = null;
+const SEARCH_DEBOUNCE_MS = 500;
 let searchDebounce = null;
 let keyNavCursor = -1; // Tracks keyboard navigation position (separate from selection anchor)
 let recentImagesCollapsed = false;
@@ -55,6 +56,10 @@ function migrateMetadata(m) {
 }
 let cachedVisibleImages = null; // images after excludes, before tag/search filters
 let lowercaseIndex = null; // Map<imagePath, lowercasedPath> for fast search
+const cachedImageTags = new Map();
+let cachedAutoTagRules = null;
+let cachedTagSummary = null;
+let renderedTagSummary = null;
 
 // ===== Tag Colors =====
 function tagColor(tag) {
@@ -252,6 +257,17 @@ class VirtualGrid {
 // ===== Filtering =====
 function invalidateVisibleCache() {
   cachedVisibleImages = null;
+  invalidateTagCache();
+}
+
+function invalidateTagCache(imagePaths) {
+  if (imagePaths) {
+    for (const path of imagePaths) cachedImageTags.delete(path);
+  } else {
+    cachedImageTags.clear();
+    cachedAutoTagRules = null;
+  }
+  cachedTagSummary = null;
 }
 
 function getVisibleImages() {
@@ -627,6 +643,11 @@ function setupComposer() {
   });
 }
 
+function cancelPendingSearch() {
+  clearTimeout(searchDebounce);
+  searchDebounce = null;
+}
+
 // ===== Saved Searches =====
 function saveCurrentView() {
   const name = prompt('Name this saved view:');
@@ -648,6 +669,7 @@ function saveCurrentView() {
 }
 
 function restoreSavedView(view) {
+  cancelPendingSearch();
   state.searchQuery = view.searchQuery || '';
   state.currentFilter = view.currentFilter || 'all';
   state.dimFilter = view.dimFilter || null;
@@ -736,6 +758,7 @@ function showSearchHistory() {
     text.textContent = q;
     item.appendChild(text);
     item.addEventListener('click', () => {
+      cancelPendingSearch();
       const input = document.getElementById('search-input');
       input.value = q;
       state.searchQuery = q;
@@ -874,7 +897,7 @@ function applyFilters() {
   if (state.sortBy !== 'name' || state.sortDir !== 'asc') {
     const dir = state.sortDir === 'asc' ? 1 : -1;
     const dims = state.dimensions;
-    images.sort((a, b) => {
+    images = [...images].sort((a, b) => {
       switch (state.sortBy) {
         case 'name':
           return dir * a.localeCompare(b);
@@ -910,45 +933,42 @@ function relativePath(img) {
 }
 
 function getTagsForImage(img) {
-  const manual = activeConfig().tags[img] || [];
-  const auto = [];
+  if (cachedImageTags.has(img)) return cachedImageTags.get(img);
+  const config = activeConfig();
+  if (!cachedAutoTagRules) {
+    cachedAutoTagRules = (config.autoTagRules || []).map(rule => ({
+      regex: globCompile(rule.pattern), tags: rule.tags,
+    })).filter(rule => rule.regex && rule.tags.length);
+  }
+  const tags = new Set(config.tags[img] || []);
   const rel = relativePath(img);
-  for (const rule of activeConfig().autoTagRules || []) {
-    if (globMatch(rel, rule.pattern) || globMatch(img, rule.pattern)) {
-      for (const t of rule.tags) {
-        if (!manual.includes(t) && !auto.includes(t)) auto.push(t);
-      }
+  for (const rule of cachedAutoTagRules) {
+    if (rule.regex.test(rel) || rule.regex.test(img)) {
+      for (const tag of rule.tags) tags.add(tag);
     }
   }
-  return [...manual, ...auto];
+  const result = [...tags];
+  cachedImageTags.set(img, result);
+  return result;
+}
+
+function getTagSummary() {
+  if (cachedTagSummary) return cachedTagSummary;
+  const visible = getVisibleImages();
+  const counts = new Map();
+  let untagged = 0;
+  // Resolve each image once, sharing the result with filtering and thumbnails.
+  for (const img of visible) {
+    const tags = getTagsForImage(img);
+    if (!tags.length) untagged++;
+    for (const tag of tags) counts.set(tag, (counts.get(tag) || 0) + 1);
+  }
+  cachedTagSummary = { counts, total: visible.length, untagged };
+  return cachedTagSummary;
 }
 
 function getAllTags() {
-  const counts = new Map();
-  const visible = getVisibleImages();
-
-  // Count manual tags
-  for (const [path, tags] of Object.entries(activeConfig().tags || {})) {
-    if (!visible.includes(path)) continue;
-    for (const t of tags) counts.set(t, (counts.get(t) || 0) + 1);
-  }
-
-  // Count auto-tag rule matches (iterate rules, not images)
-  for (const rule of activeConfig().autoTagRules || []) {
-    if (!rule.pattern || !rule.tags.length) continue;
-    const re = globCompile(rule.pattern);
-    if (!re) continue;
-    let ruleCount = 0;
-    for (const img of visible) {
-      const rel = relativePath(img);
-      if (re.test(rel) || re.test(img)) ruleCount++;
-    }
-    for (const t of rule.tags) {
-      counts.set(t, (counts.get(t) || 0) + ruleCount);
-    }
-  }
-
-  return counts;
+  return getTagSummary().counts;
 }
 
 // Simple glob matching (supports *, **, ?) with compiled regex cache
@@ -988,15 +1008,12 @@ function updateGrid() {
 }
 
 function updateSidebar() {
-  state.allTags = getAllTags();
-
-  // Update counts
-  const excludeSet = new Set(activeConfig().excludedFiles || []);
-  const visibleImages = state.allImages.filter(img => !excludeSet.has(img));
-  document.getElementById('count-all').textContent = visibleImages.length;
-
-  const untaggedCount = visibleImages.filter(img => !getTagsForImage(img).length).length;
-  document.getElementById('count-untagged').textContent = untaggedCount;
+  const summary = getTagSummary();
+  // Search, dimensions and sorting do not change collection-wide tag counts.
+  if (renderedTagSummary === summary) return;
+  state.allTags = summary.counts;
+  document.getElementById('count-all').textContent = summary.total;
+  document.getElementById('count-untagged').textContent = summary.untagged;
 
   // Build custom tag list
   const container = document.getElementById('tag-list-custom');
@@ -1023,6 +1040,8 @@ function updateSidebar() {
     });
     container.appendChild(item);
   }
+  renderedTagSummary = summary;
+  activateFilter();
 }
 
 function showTagContextMenu(e, tag, count) {
@@ -1054,6 +1073,7 @@ function showTagContextMenu(e, tag, count) {
         rule.tags = rule.tags.filter(t => t !== tag);
       }
       activeConfig().autoTagRules = activeConfig().autoTagRules.filter(r => r.tags.length > 0);
+      invalidateTagCache();
       scheduleSave();
       if (state.currentFilter === tag) state.currentFilter = 'all';
       updateGrid();
@@ -1287,6 +1307,7 @@ function addTagToImages(imagePaths, tag) {
       activeConfig().tags[p].push(tag);
     }
   }
+  invalidateTagCache(imagePaths);
   scheduleSave();
   updateDetailTags();
   updateSidebar();
@@ -1299,6 +1320,7 @@ function removeTagFromImages(imagePaths, tag) {
     activeConfig().tags[p] = activeConfig().tags[p].filter(t => t !== tag);
     if (activeConfig().tags[p].length === 0) delete activeConfig().tags[p];
   }
+  invalidateTagCache(imagePaths);
   scheduleSave();
   updateDetailTags();
   updateSidebar();
@@ -1555,6 +1577,7 @@ function collectRulesFromModal() {
       activeConfig().excludePatterns.push(pattern);
     }
   });
+  invalidateVisibleCache();
 }
 
 // ===== Persistence =====
@@ -4282,18 +4305,24 @@ async function init() {
 
   const searchInput = document.getElementById('search-input');
   const searchClear = document.getElementById('btn-search-clear');
+  function applySearchInput() {
+    cancelPendingSearch();
+    state.searchQuery = searchInput.value;
+    if (searchInput.value.trim()) addSearchHistory(searchInput.value.trim());
+    updateGrid();
+  }
   searchInput.addEventListener('input', (e) => {
     searchClear.classList.toggle('hidden', !e.target.value);
     hideSearchHistory();
-    clearTimeout(searchDebounce);
-    searchDebounce = setTimeout(() => {
-      state.searchQuery = e.target.value;
-      if (e.target.value.trim()) addSearchHistory(e.target.value.trim());
-      updateGrid();
-    }, 150);
+    cancelPendingSearch();
+    searchDebounce = setTimeout(applySearchInput, SEARCH_DEBOUNCE_MS);
   });
   searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown' && !searchInput.value) {
+    if (e.key === 'Enter' && !e.isComposing) {
+      e.preventDefault();
+      hideSearchHistory();
+      applySearchInput();
+    } else if (e.key === 'ArrowDown' && !searchInput.value) {
       e.preventDefault();
       showSearchHistory();
     } else if (e.key === 'Escape') {
@@ -4307,6 +4336,7 @@ async function init() {
     if (!e.target.closest('#search-wrapper')) hideSearchHistory();
   });
   searchClear.addEventListener('click', () => {
+    cancelPendingSearch();
     searchInput.value = '';
     state.searchQuery = '';
     searchClear.classList.add('hidden');
@@ -4700,6 +4730,7 @@ function setupOpenModal() {
 }
 
 async function scanDirectory(dirPath, recursive) {
+  cancelPendingSearch();
   galleryHoverPreview?.clearCache();
   // Show scan overlay
   const overlay = document.getElementById('scan-overlay');

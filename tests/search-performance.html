@@ -1,0 +1,98 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Large collection search regression</title>
+<!-- Serve the repository with python3 -m http.server, then visit
+     /tests/search-performance.html. Uses the checked-in MiniFantasy index. -->
+<pre id="result">Running…</pre>
+<iframe id="app" src="../docs/index.html" width="1400" height="900" title="App under test"></iframe>
+<script>
+const frame = document.getElementById('app');
+const result = document.getElementById('result');
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+const assert = (condition, message) => { if (!condition) throw new Error(message); };
+frame.addEventListener('load', async () => {
+  try {
+    const win = frame.contentWindow;
+    const doc = win.document;
+    for (let attempt = 0; !win.eval('galleryHoverPreview') && attempt < 40; attempt++) await pause(50);
+    assert(win.eval('galleryHoverPreview'), 'App failed to initialize');
+    const [index, config] = await Promise.all([
+      fetch('../tools/indexer/out/minifantasy-index.jsonl').then(r => r.text()),
+      fetch('../tools/indexer/out/MiniFantasy.pixol-browser.json').then(r => r.json()),
+    ]);
+    const entries = index.trim().split('\n').map(JSON.parse);
+    win._searchFixture = { entries, config };
+    win.eval(`
+      window.api.saveMetadata = async () => true; // Never persist fixture state.
+      const { entries, config } = window._searchFixture;
+      state.metadata = { activeConfig: 'MiniFantasy', configs: { MiniFantasy: config } };
+      state.baseDirectory = '/assets';
+      state.allImages = entries.map(e => '/assets/' + e.path).sort();
+      state.dimensions = Object.fromEntries(entries.map(e => ['/assets/' + e.path, {width:e.w,height:e.h}]));
+      lowercaseIndex = new Map(state.allImages.map(p => [p,p.toLowerCase()]));
+      const thumbnail = document.createElement('canvas'); thumbnail.width = thumbnail.height = 1;
+      const url = thumbnail.toDataURL();
+      for (const path of state.allImages) window._blobUrls.set(path,url);
+      invalidateVisibleCache(); removeEmptyState(); updateGrid();
+      window.searchUpdates = [];
+      const originalUpdateGrid = updateGrid;
+      updateGrid = function () {
+        const start = performance.now();
+        originalUpdateGrid();
+        searchUpdates.push({ query:state.searchQuery, ms:performance.now()-start, count:state.filteredImages.length });
+      };
+    `);
+    const sidebar = doc.getElementById('tag-list-custom');
+    const firstTag = sidebar.firstElementChild;
+    const input = doc.getElementById('search-input');
+    input.focus();
+    const type = text => {
+      input.value = text;
+      input.dispatchEvent(new win.Event('input', { bubbles:true }));
+    };
+    const enter = () => input.dispatchEvent(new win.KeyboardEvent('keydown', { key:'Enter', bubbles:true }));
+    for (const query of ['p','po','poi','pois','poiso','poison']) {
+      type(query); await pause(80);
+      assert(win.searchUpdates.length === 0, 'Filtering ran while still typing');
+    }
+    await pause(300);
+    assert(win.searchUpdates.length === 0, 'Debounce fired before the 500 ms pause');
+    await pause(220);
+    assert(win.searchUpdates.length === 1 && win.searchUpdates[0].query === 'poison', 'Typing did not produce exactly one final search');
+    assert(win.searchUpdates[0].count === 33, 'Unexpected poison search results');
+    assert(sidebar.firstElementChild === firstTag, 'Search rebuilt the unchanged sidebar');
+    type('t:poison'); enter();
+    assert(win.searchUpdates.at(-1).query === 't:poison' && win.searchUpdates.at(-1).count === 26, 'Enter did not apply the tag search immediately');
+    const beforeClear = win.searchUpdates.length;
+    type('stale-query'); doc.getElementById('btn-search-clear').click();
+    await pause(550);
+    assert(win.searchUpdates.length === beforeClear + 1 && win.eval('state.searchQuery') === '', 'Clear did not cancel pending search');
+    assert(win.searchUpdates.at(-1).count === 9250, 'Clear failed to restore the visible collection');
+    type('stale-query'); win.restoreSavedView({searchQuery:'poison'});
+    const afterRestore = win.searchUpdates.length;
+    await pause(550);
+    assert(win.searchUpdates.length === afterRestore && win.eval('state.searchQuery') === 'poison', 'Pending typing overwrote the saved view');
+    type('');
+    win.eval(`state.metadata.searchHistory=['t:poison'];showSearchHistory();`);
+    doc.querySelector('.search-history-item').click();
+    const afterHistory = win.searchUpdates.length;
+    await pause(550);
+    assert(win.searchUpdates.length === afterHistory && win.eval('state.searchQuery') === 't:poison', 'Pending typing overwrote search history');
+    const maxSearchMs = Math.max(...win.searchUpdates.map(update => update.ms));
+    assert(maxSearchMs < 200, `Search still blocks for ${maxSearchMs.toFixed(1)} ms`);
+    assert(doc.getElementById('count-all').textContent === '9250', 'Sidebar total includes excluded images');
+    const target = win.eval('getVisibleImages()[0]');
+    win.addTagToImages([target], 'search-test');
+    type('t:search-test'); enter();
+    assert(win.searchUpdates.at(-1).count === 1 && win.eval('state.allTags.get("search-test")') === 1, 'Added tag was not reflected in cached search and counts');
+    win.removeTagFromImages([target], 'search-test'); enter();
+    assert(win.searchUpdates.at(-1).count === 0 && !win.eval('state.allTags.has("search-test")'), 'Removed tag remains in cached search or counts');
+    result.textContent = `PASS: ${entries.length} images, ${config.autoTagRules.length} rules; max search update ${maxSearchMs.toFixed(1)} ms\n` +
+      '500 ms debounce, Enter, clear, saved views, history, sidebar reuse, exclusions, and manual-tag invalidation passed.';
+    result.dataset.status = 'passed';
+  } catch (error) {
+    result.textContent = 'FAIL: ' + error.message;
+    result.dataset.status = 'failed';
+  }
+});
+</script>
