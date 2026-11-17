@@ -76,11 +76,17 @@
     <span class="filter-label">Sort:</span>
     <select id="sort-by" class="sort-select">
       <option value="name">Name</option>
+      <option value="path">Path</option>
       <option value="size">File Size</option>
       <option value="dimensions">Dimensions</option>
       <option value="modified">Date Modified</option>
     </select>
     <button id="sort-dir" class="sort-dir-btn" title="Toggle sort direction">&#9650;</button>
+    <div class="filter-divider"></div>
+    <div class="view-mode-toggle" role="group" aria-label="Results display mode">
+      <button type="button" data-view-mode="grid" title="Grid view" aria-pressed="true">Grid</button>
+      <button type="button" data-view-mode="list" title="List view" aria-pressed="false">List</button>
+    </div>
   </div>
 
   <!-- Main Layout -->
@@ -124,6 +130,7 @@
 
     <!-- Image Grid -->
     <div id="grid-container">
+      <div class="list-header"><button id="path-header" type="button" aria-sort="none">Path</button></div>
       <div id="grid-status"></div>
       <div id="select-rect" class="hidden"></div>
     </div>

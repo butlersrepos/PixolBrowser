@@ -28,6 +28,16 @@ function app() {
 const run = (ctx, code) => vm.runInContext(code, ctx);
 const plain = value => JSON.parse(JSON.stringify(value));
 
+test('path sort uses relative paths with natural, case-insensitive order in both directions', () => {
+  const ctx = app();
+  run(ctx, `state.allImages = ['/assets/frame_10.png', '/assets/sub/Frame_2.png', '/assets/frame_2.png', '/assets/Frame_1.png'];
+    invalidateVisibleCache(); state.sortBy = 'path'; state.sortDir = 'asc'; applyFilters();`);
+  const ascending = plain(run(ctx, 'state.filteredImages'));
+  assert.deepEqual(ascending, ['/assets/Frame_1.png', '/assets/frame_2.png', '/assets/frame_10.png', '/assets/sub/Frame_2.png']);
+  run(ctx, `state.sortDir = 'desc'; applyFilters();`);
+  assert.deepEqual(plain(run(ctx, 'state.filteredImages')), [...ascending].reverse());
+});
+
 test('sidebar counts each visible image once per tag across overlapping rules and manual tags', () => {
   const ctx = app();
   assert.deepEqual(plain([...ctx.getAllTags()]), [['effect', 2], ['poison', 1]]);
