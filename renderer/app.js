@@ -1808,7 +1808,7 @@ function setupGalleryHoverPreview() {
       const scale = fit >= 1 ? Math.min(8, Math.floor(fit)) : fit;
       const displayWidth = Math.max(1, Math.round(frameWidth * scale));
       const displayHeight = Math.max(1, Math.round(frameHeight * scale));
-      nameEl.textContent = relativePath(path);
+      nameEl.textContent = basename(path);
       hintEl.textContent = animated ? `${layout.source} · ${layout.cols} columns × ${layout.rows} rows` :
         'Double-click → Frames to set the grid';
       const nativePlayback = !saved && /\.(gif|webp)$/i.test(path) && !reducedMotion.matches;
@@ -2078,7 +2078,7 @@ function renderRecentImages() {
     thumb.loading = 'lazy';
     const name = document.createElement('span');
     name.className = 'recent-image-name';
-    name.textContent = relativePath(imgPath);
+    name.textContent = basename(imgPath);
     item.appendChild(thumb);
     item.appendChild(name);
     item.addEventListener('click', () => {

@@ -423,8 +423,6 @@ html, body {
 .recent-image-name {
   overflow: hidden;
   text-overflow: ellipsis;
-  direction: rtl;
-  text-align: left;
 }
 
 #sidebar-actions {
@@ -2093,8 +2091,6 @@ html, body {
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
-  direction: rtl;
-  text-align: left;
   white-space: nowrap;
 }
 .sprite-hover-info,
