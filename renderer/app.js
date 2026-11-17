@@ -1173,6 +1173,33 @@ function syncSelectionClasses() {
   }
 }
 
+// Desktop-only external editor controls.
+let externalEditorRequest = 0;
+async function refreshExternalEditor() {
+  if (!window.api.getExternalEditor) return;
+  const request = ++externalEditorRequest;
+  try {
+    const editor = await window.api.getExternalEditor(state.metadata?.externalEditor || null);
+    if (request !== externalEditorRequest) return;
+    const button = document.getElementById('carousel-open-external');
+    document.getElementById('carousel-open-external-label').textContent = editor.name ? `Open in ${editor.name}` : 'Open Externally';
+    button.title = editor.path || 'Open with the system default app';
+    const choice = document.getElementById('settings-external-editor-choice');
+    choice.textContent = `${state.metadata?.externalEditor ? '' : 'Auto: '}${editor.name || 'System default'}${editor.source === 'running' && editor.path.includes('/Steam/') ? ' (Steam)' : ''}`;
+    choice.title = editor.path || 'System default app';
+  } catch (error) {
+    showExternalEditorError(error.message || 'Could not find external editor');
+  }
+}
+
+function showExternalEditorError(message) {
+  const toast = document.getElementById('external-editor-toast');
+  toast.textContent = `Could not open image: ${message}`;
+  toast.classList.remove('hidden');
+  clearTimeout(showExternalEditorError.timer);
+  showExternalEditorError.timer = setTimeout(() => toast.classList.add('hidden'), 4000);
+}
+
 // ===== Detail Panel =====
 function updateDetailPanel() {
   const content = document.getElementById('detail-content');
@@ -2190,6 +2217,7 @@ function openCarousel(items, startIndex) {
   document.getElementById('carousel-next').style.display = multi ? '' : 'none';
   document.getElementById('carousel-counter').style.display = multi ? '' : 'none';
   loadCarouselImage();
+  refreshExternalEditor();
 }
 
 function closeCarousel() {
@@ -3388,6 +3416,21 @@ function setupCarousel() {
     }
   });
 
+  // Open the image currently shown in Inspect.
+  const externalBtn = document.getElementById('carousel-open-external');
+  externalBtn.style.display = window.api.chooseExternalEditor ? '' : 'none';
+  externalBtn.addEventListener('click', async () => {
+    if (!window.api.openInExternalEditor) return;
+    try {
+      const filePath = carousel.items[carousel.currentIndex];
+      const result = await window.api.openInExternalEditor(filePath, state.metadata?.externalEditor || null);
+      if (!result.ok) showExternalEditorError(result.error);
+      else refreshExternalEditor();
+    } catch (error) {
+      showExternalEditorError(error.message || 'Could not open image');
+    }
+  });
+
   // Carousel background mode bar
   setupBgModeBar('carousel-bg-bar', 'carousel-image-wrapper', 'carousel-bg-input', 'carouselBgMode');
 
@@ -4095,12 +4138,28 @@ function setupSettings() {
   function renderGeneralSettings() {
     const ftInput = document.getElementById('settings-frame-time');
     ftInput.value = state.metadata?.defaultFrameTime || 200;
+    document.getElementById('settings-external-editor-group').style.display = window.api.chooseExternalEditor ? '' : 'none';
+    refreshExternalEditor();
   }
   document.getElementById('settings-frame-time').addEventListener('change', (e) => {
     const val = Math.max(16, Math.min(2000, parseInt(e.target.value) || 200));
     e.target.value = val;
     state.metadata.defaultFrameTime = val;
     scheduleSave();
+  });
+
+  document.getElementById('settings-external-editor-choose').addEventListener('click', async () => {
+    if (!window.api.chooseExternalEditor) return;
+    const chosen = await window.api.chooseExternalEditor();
+    if (!chosen) return;
+    state.metadata.externalEditor = chosen;
+    scheduleSave();
+    refreshExternalEditor();
+  });
+  document.getElementById('settings-external-editor-reset').addEventListener('click', () => {
+    delete state.metadata.externalEditor;
+    scheduleSave();
+    refreshExternalEditor();
   });
 
   // Config management

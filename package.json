@@ -19,6 +19,7 @@
     },
     "files": [
       "main.js",
+      "external-editor.js",
       "preload.js",
       "renderer/**/*",
       "icon.png",

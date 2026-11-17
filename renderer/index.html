@@ -191,6 +191,7 @@
         <button id="carousel-copy-file" class="carousel-titlebar-btn carousel-text-btn" title="Copy file to clipboard">&#128203; Copy File</button>
         <button id="carousel-copy-path" class="carousel-titlebar-btn carousel-text-btn" title="Copy file path">&#128193; Copy Path</button>
         <button id="carousel-reveal" class="carousel-titlebar-btn carousel-text-btn" title="Open containing folder">&#128194; Open Folder</button>
+        <button id="carousel-open-external" class="carousel-titlebar-btn carousel-text-btn" title="Open Externally"><span aria-hidden="true">&#9998;</span><span id="carousel-open-external-label">Open Externally</span></button>
         <button id="carousel-sprite-toggle" class="carousel-titlebar-btn carousel-text-btn" title="Animation frame tools">&#9638; Frames</button>
         <button id="carousel-region-toggle" class="carousel-titlebar-btn carousel-text-btn" title="Select region">&#9645; Region</button>
         <fieldset class="bg-mode-fieldset">
@@ -320,6 +321,14 @@
               </label>
               <p class="help-text">Default milliseconds per frame for sprite sheet animation playback. Can be overridden per-session in the animation bar.</p>
             </div>
+            <div class="settings-group" id="settings-external-editor-group">
+              <div class="settings-row">
+                <span class="settings-row-label">External editor</span>
+                <span id="settings-external-editor-choice" class="settings-external-editor-choice"></span>
+                <button id="settings-external-editor-choose" class="btn-secondary btn-sm">Choose…</button>
+                <button id="settings-external-editor-reset" class="btn-secondary btn-sm">Reset</button>
+              </div>
+            </div>
           </div>
 
           <!-- Rules & Tags Config Section -->
@@ -348,6 +357,8 @@
       </div>
     </div>
   </div>
+
+  <div id="external-editor-toast" class="external-editor-toast hidden" role="alert"></div>
 
   <!-- Scan Progress Overlay -->
   <div id="scan-overlay" class="hidden">
