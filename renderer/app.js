@@ -1163,7 +1163,7 @@ async function refreshExternalEditor() {
     const editor = await window.api.getExternalEditor(state.metadata?.externalEditor || null);
     if (request !== externalEditorRequest) return;
     const button = document.getElementById('carousel-open-external');
-    button.textContent = editor.name ? `Open in ${editor.name}` : 'Open Externally';
+    document.getElementById('carousel-open-external-label').textContent = editor.name ? `Open in ${editor.name}` : 'Open Externally';
     button.title = editor.path || 'Open with the system default app';
     const choice = document.getElementById('settings-external-editor-choice');
     choice.textContent = `${state.metadata?.externalEditor ? '' : 'Auto: '}${editor.name || 'System default'}${editor.source === 'running' && editor.path.includes('/Steam/') ? ' (Steam)' : ''}`;
