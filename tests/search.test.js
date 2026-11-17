@@ -75,13 +75,16 @@ test('warm collection supports text, tag and untagged queries without rematching
 test('manual-tag edits invalidate affected images and counts without reevaluating other images', () => {
   const ctx = app();
   ctx.getAllTags();
+  assert.deepEqual(plain(ctx.getLowercaseTagsForImage('/assets/hero.png')), []);
   const cachedOther = ctx.getTagsForImage('/assets/effects/spark.png');
   run(ctx, `activeConfig().tags['/assets/hero.png'] = ['hero']; invalidateTagCache(['/assets/hero.png']);`);
   assert.deepEqual(plain(ctx.getTagsForImage('/assets/hero.png')), ['hero']);
+  assert.deepEqual(plain(ctx.getLowercaseTagsForImage('/assets/hero.png')), ['hero']);
   assert.equal(ctx.getAllTags().get('hero'),1);
   assert.equal(ctx.getTagsForImage('/assets/effects/spark.png'), cachedOther);
   run(ctx, `delete activeConfig().tags['/assets/hero.png']; invalidateTagCache(['/assets/hero.png']);`);
   assert.deepEqual(plain(ctx.getTagsForImage('/assets/hero.png')), []);
+  assert.deepEqual(plain(ctx.getLowercaseTagsForImage('/assets/hero.png')), []);
   assert.equal(ctx.getAllTags().has('hero'),false);
 });
 
@@ -103,6 +106,117 @@ test('dimension and format modifiers remain composable with tag and text searche
   const ctx = app();
   run(ctx, `state.searchQuery='poison t:effect s:32-64 f:png'; applyFilters();`);
   assert.deepEqual(plain(run(ctx,'state.filteredImages')),['/assets/effects/poison.png']);
+});
+
+test('plain search words match every term in any order, while quotes keep a phrase', () => {
+  const ctx = app();
+  run(ctx, `
+    state.allImages = [
+      '/assets/card_back.png', '/assets/back/card.png',
+      '/assets/cards/backs/x.png', '/assets/back card.png',
+      '/assets/card.png'
+    ];
+    activeConfig().tags = { '/assets/card_back.png': ['deck'] };
+    activeConfig().autoTagRules = [];
+    activeConfig().excludePatterns = [];
+    invalidateVisibleCache();
+    lowercaseIndex = new Map(state.allImages.map(path => [path, path.toLowerCase()]));
+  `);
+  for (const [query, expected] of [
+    ['back card', ['/assets/card_back.png', '/assets/back/card.png', '/assets/cards/backs/x.png', '/assets/back card.png']],
+    ['card back', ['/assets/card_back.png', '/assets/back/card.png', '/assets/cards/backs/x.png', '/assets/back card.png']],
+    ['"back card"', ['/assets/back card.png']],
+    ['missing card', []],
+    ['card', ['/assets/card_back.png', '/assets/back/card.png', '/assets/cards/backs/x.png', '/assets/back card.png', '/assets/card.png']],
+    ['back card t:deck', ['/assets/card_back.png']]
+  ]) {
+    ctx.query = query;
+    run(ctx, 'state.searchQuery = query; applyFilters();');
+    assert.deepEqual(plain(run(ctx, 'state.filteredImages')), expected, query);
+  }
+});
+
+test('name filters match cached file names, not folder names, and combine with other terms', () => {
+  const ctx = app();
+  run(ctx, `
+    state.allImages = [
+      '/assets/card/hero.png', '/assets/card/back.png',
+      '/assets/other/card_back.png', '/assets/other/card back.png'
+    ];
+    activeConfig().tags = { '/assets/other/card_back.png': ['deck'] };
+    activeConfig().autoTagRules = [];
+    activeConfig().excludePatterns = [];
+    invalidateVisibleCache();
+    lowercaseBasenameIndex = new Map(state.allImages.map(path => [path, basename(path).toLowerCase()]));
+    basename = () => { throw Error('Rebuilt file name during search'); };
+  `);
+  for (const [query, expected] of [
+    ['name:card', ['/assets/other/card_back.png', '/assets/other/card back.png']],
+    ['n:CARD', ['/assets/other/card_back.png', '/assets/other/card back.png']],
+    ['name:card n:back', ['/assets/other/card_back.png', '/assets/other/card back.png']],
+    ['name:"card back"', ['/assets/other/card back.png']],
+    ['n:"card back"', ['/assets/other/card back.png']],
+    ['name:hero', ['/assets/card/hero.png']],
+    ['other name:card t:deck', ['/assets/other/card_back.png']],
+  ]) {
+    ctx.query = query;
+    run(ctx, 'state.searchQuery = query; applyFilters();');
+    assert.deepEqual(plain(run(ctx, 'state.filteredImages')), expected, query);
+  }
+});
+
+test('every filter has unique aliases and long and short forms parse alike', () => {
+  const ctx = app();
+  run(ctx, 'Date.now = () => 1700000000000;');
+  const aliases = plain(run(ctx, 'SEARCH_FILTERS.flatMap(filter => [filter.long, filter.short])'));
+  assert.equal(new Set(aliases).size, aliases.length);
+  for (const [long, short, value] of [
+    ['name', 'n', 'card'], ['tag', 't', 'effect'], ['size', 's', 'small'],
+    ['date', 'd', 'week'], ['type', 'f', 'png'],
+  ]) {
+    assert.deepEqual(plain(run(ctx, `parseSearchQuery('${long}:${value}')`)),
+      plain(run(ctx, `parseSearchQuery('${short}:${value}')`)), long);
+  }
+});
+
+test('minus excludes words, phrases, tags, file names, and types without changing other syntax', () => {
+  const ctx = app();
+  run(ctx, `
+    state.allImages = [
+      '/assets/chest.png', '/assets/chest_mimic.png', '/assets/card/glasses.png',
+      '/assets/other/card-back.png', '/assets/other/card back.png', '/assets/chest.gif'
+    ];
+    activeConfig().tags = { '/assets/chest_mimic.png': ['Boss'] };
+    activeConfig().autoTagRules = [];
+    activeConfig().excludePatterns = [];
+    state.dimensions = Object.fromEntries(state.allImages.map(path => [path, {
+      width: path.includes('card back') ? 100 : 32, height: 32,
+    }]));
+    invalidateVisibleCache();
+    lowercaseIndex = new Map(state.allImages.map(path => [path, path.toLowerCase()]));
+    lowercaseBasenameIndex = new Map(state.allImages.map(path => [path, basename(path).toLowerCase()]));
+  `);
+  const all = plain(run(ctx, 'state.allImages'));
+  for (const [query, expected] of [
+    ['chest -mimic', ['/assets/chest.png', '/assets/chest.gif']],
+    ['-mimic', all.filter(path => !path.includes('mimic'))],
+    ['-t:boss', all.filter(path => !path.includes('mimic'))],
+    ['-tag:boss', all.filter(path => !path.includes('mimic'))],
+    ['-n:card', all.filter(path => !path.includes('/other/card'))],
+    ['-name:card', all.filter(path => !path.includes('/other/card'))],
+    ['-"card back"', all.filter(path => !path.includes('card back'))],
+    ['card-back', ['/assets/other/card-back.png']],
+    ['s:16-64', all.filter(path => !path.includes('card back'))],
+    ['-f:gif', all.filter(path => !path.endsWith('.gif'))],
+    ['-type:gif', all.filter(path => !path.endsWith('.gif'))],
+    ['-', all],
+  ]) {
+    ctx.query = query;
+    run(ctx, 'state.searchQuery = query; applyFilters();');
+    assert.deepEqual(plain(run(ctx, 'state.filteredImages')), expected, query);
+  }
+  assert.equal(run(ctx, "parseSearchQuery('d:>2026-01-01').dateFilter"), Date.parse('2026-01-01'));
+  assert.equal(run(ctx, "parseSearchQuery('-mimic').text"), '');
 });
 
 test('changing sort order does not mutate the cached collection order', () => {

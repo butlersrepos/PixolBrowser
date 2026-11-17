@@ -141,7 +141,18 @@ html, body {
   position: relative;
   display: flex;
   align-items: center;
+  gap: 7px;
 }
+
+.search-help-btn {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 19px;
+  cursor: pointer;
+  padding: 2px;
+}
+.search-help-btn:hover { color: var(--text); }
 
 #search-input {
   width: 280px;
@@ -988,6 +999,14 @@ html, body {
 }
 
 .modal-body h3 { font-size: 14px; margin-bottom: 4px; }
+.search-help-content { width: 680px; }
+.search-help-content .modal-body { gap: 0; padding: 12px 20px 20px; }
+.search-help-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.search-help-table th, .search-help-table td { padding: 8px 7px; text-align: left; border-bottom: 1px solid var(--border); }
+.search-help-table th { color: var(--muted); font-weight: 600; }
+.search-help-table tr:last-child td { border-bottom: 0; }
+.search-help-example { border: 0; background: none; color: var(--accent); cursor: pointer; font: inherit; padding: 0; }
+.search-help-example:hover { text-decoration: underline; }
 .help-text { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
 
 .modal-footer {

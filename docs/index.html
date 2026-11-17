@@ -12,7 +12,8 @@
     <button id="btn-open" title="Choose Directory">Open Folder</button>
     <div id="toolbar-spacer"></div>
     <div id="search-wrapper">
-      <input type="text" id="search-input" placeholder="Search... t:tag s:size f:type d:date" autocomplete="off" />
+      <button id="btn-search-help" class="search-help-btn" title="Search help" aria-label="Search help">&#9432;</button>
+      <input type="text" id="search-input" placeholder="Search images" autocomplete="off" />
       <button id="btn-search-clear" class="search-clear hidden" title="Clear search">&times;</button>
       <div id="search-history" class="search-history hidden"></div>
     </div>
@@ -22,6 +23,22 @@
     </button>
     <button id="btn-rules" title="Manage auto-tag rules and exclusions">Rules</button>
     <button id="btn-settings" title="Settings">Settings</button>
+  </div>
+
+  <div id="search-help-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="search-help-title">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content search-help-content">
+      <div class="modal-header">
+        <h2 id="search-help-title">Search help</h2>
+        <button class="modal-close" aria-label="Close search help">&times;</button>
+      </div>
+      <div class="modal-body">
+        <table class="search-help-table">
+          <thead><tr><th>Filter</th><th>Short</th><th>Try</th><th>Matches</th></tr></thead>
+          <tbody id="search-help-rows"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
 
