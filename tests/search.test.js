@@ -66,10 +66,50 @@ test('warm collection supports text, tag and untagged queries without rematching
     ['','effect',['/assets/effects/poison.png','/assets/effects/spark.png']]
   ]) {
     ctx.query = query; ctx.filter = filter;
-    run(ctx, 'state.searchQuery=query;state.currentFilter=filter;applyFilters();');
+    run(ctx, `state.searchQuery=query;state.activeTags=new Set(filter === 'all' || filter === 'untagged' ? [] : [filter]);state.untaggedFilter=filter === 'untagged';applyFilters();`);
     assert.deepEqual(plain(run(ctx,'state.filteredImages')),expected);
     ctx.getAllTags();
   }
+});
+
+test('sidebar tags accumulate and require every selected tag', () => {
+  const ctx = app();
+  run(ctx, `toggleTagFilter('effect');toggleTagFilter('poison');applyFilters();`);
+  assert.deepEqual(plain(run(ctx, 'state.filteredImages')), ['/assets/effects/poison.png']);
+  assert.deepEqual(plain(run(ctx, '[...state.activeTags]')), ['effect', 'poison']);
+  run(ctx, `toggleTagFilter('poison');applyFilters();`);
+  assert.deepEqual(plain(run(ctx, 'state.filteredImages')), ['/assets/effects/poison.png', '/assets/effects/spark.png']);
+});
+
+test('Untagged is exclusive with selected tags', () => {
+  const ctx = app();
+  run(ctx, `toggleTagFilter('effect');selectSidebarFilter('untagged');applyFilters();`);
+  assert.deepEqual(plain(run(ctx, '[...state.activeTags]')), []);
+  assert.equal(run(ctx, 'state.untaggedFilter'), true);
+  assert.deepEqual(plain(run(ctx, 'state.filteredImages')), ['/assets/hero.png']);
+  run(ctx, `toggleTagFilter('poison');applyFilters();`);
+  assert.equal(run(ctx, 'state.untaggedFilter'), false);
+  assert.deepEqual(plain(run(ctx, 'state.filteredImages')), ['/assets/effects/poison.png']);
+  run(ctx, `selectSidebarFilter('all');applyFilters();`);
+  assert.deepEqual(plain(run(ctx, '[...state.activeTags]')), []);
+  assert.equal(run(ctx, 'state.untaggedFilter'), false);
+});
+
+test('old saved views restore a single tag or Untagged', () => {
+  const ctx = app();
+  const element = { classList: { toggle() {} }, value: '', textContent: '' };
+  ctx.document.getElementById = () => element;
+  ctx.clearTimeout = clearTimeout;
+  run(ctx, `activateFilter=()=>{};updateDimFilterUI=()=>{};updatePathHeader=()=>{};updateGrid=()=>{};renderSavedSearches=()=>{};`);
+  run(ctx, `restoreSavedView({currentFilter:'effect'});`);
+  assert.deepEqual(plain(run(ctx, '[...state.activeTags]')), ['effect']);
+  assert.equal(run(ctx, 'state.untaggedFilter'), false);
+  run(ctx, `restoreSavedView({currentFilter:'untagged'});`);
+  assert.deepEqual(plain(run(ctx, '[...state.activeTags]')), []);
+  assert.equal(run(ctx, 'state.untaggedFilter'), true);
+  run(ctx, `restoreSavedView({activeTags:['effect','poison'],untaggedFilter:false});`);
+  assert.deepEqual(plain(run(ctx, '[...state.activeTags]')), ['effect', 'poison']);
+  assert.equal(run(ctx, 'state.untaggedFilter'), false);
 });
 
 test('manual-tag edits invalidate affected images and counts without reevaluating other images', () => {

@@ -307,6 +307,44 @@ html, body {
 .list-mode .virtual-grid-scroll { height: calc(100% - 30px); }
 
 /* === Main Layout === */
+#active-tag-filters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 31px;
+  padding: 3px 12px;
+  overflow-x: auto;
+  white-space: nowrap;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+#active-tag-filters.hidden { display: none; }
+.active-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.active-tag-name, .active-tag-remove, .active-tags-clear {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.active-tag-name { padding: 3px 2px 3px 8px; }
+.active-tag-remove {
+  padding: 3px 7px 3px 2px;
+  opacity: 0;
+  font-size: 14px;
+  line-height: 1;
+}
+.active-tag-chip:hover .active-tag-remove,
+.active-tag-remove:focus-visible { opacity: 1; }
+.active-tags-clear { flex: none; color: var(--muted); padding: 3px 6px; }
+.active-tags-clear:hover { color: var(--text); }
+body:has(#active-tag-filters:not(.hidden)) #main { height: calc(100vh - 44px - 33px - 31px); }
 #main {
   display: flex;
   height: calc(100vh - 44px - 33px);
