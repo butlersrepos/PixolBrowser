@@ -742,7 +742,7 @@ function renderSavedSearches() {
 
 function buildSavedSearchTooltip(s) {
   const parts = [];
-  if (s.searchQuery) parts.push(`Search: ${s.searchQuery}`);
+  if (s.searchQuery) parts.push(`Search: ${relativePath(s.searchQuery)}`);
   if (s.currentFilter && s.currentFilter !== 'all') parts.push(`Tag: ${s.currentFilter}`);
   if (s.dimFilter) parts.push(`Size: ${s.dimFilter.min}-${s.dimFilter.max}`);
   if (s.sortBy !== 'name') parts.push(`Sort: ${s.sortBy}`);
@@ -941,10 +941,10 @@ function applyFilters() {
 }
 
 function relativePath(img) {
-  if (state.baseDirectory && img.startsWith(state.baseDirectory)) {
-    return img.slice(state.baseDirectory.length + 1);
-  }
-  return img;
+  if (!state.baseDirectory) return img;
+  const base = state.baseDirectory.replace(/\/+$/, '') || '/';
+  const prefix = base === '/' ? '/' : base + '/';
+  return img.startsWith(prefix) ? img.slice(prefix.length) : img;
 }
 
 function compareImagePaths(a, b) {
@@ -1218,7 +1218,7 @@ function updateDetailPanel() {
     img.src = toFileUrl(imagePath);
 
     filenameEl.textContent = basename(imagePath);
-    pathEl.textContent = relativePath(imagePath);
+    pathEl.textContent = imagePath;
     excludeBtn.textContent = 'Exclude This Image';
 
     metaEl.textContent = '';
@@ -1808,7 +1808,7 @@ function setupGalleryHoverPreview() {
       const scale = fit >= 1 ? Math.min(8, Math.floor(fit)) : fit;
       const displayWidth = Math.max(1, Math.round(frameWidth * scale));
       const displayHeight = Math.max(1, Math.round(frameHeight * scale));
-      nameEl.textContent = basename(path);
+      nameEl.textContent = relativePath(path);
       hintEl.textContent = animated ? `${layout.source} · ${layout.cols} columns × ${layout.rows} rows` :
         'Double-click → Frames to set the grid';
       const nativePlayback = !saved && /\.(gif|webp)$/i.test(path) && !reducedMotion.matches;
@@ -2078,7 +2078,7 @@ function renderRecentImages() {
     thumb.loading = 'lazy';
     const name = document.createElement('span');
     name.className = 'recent-image-name';
-    name.textContent = basename(imgPath);
+    name.textContent = relativePath(imgPath);
     item.appendChild(thumb);
     item.appendChild(name);
     item.addEventListener('click', () => {
@@ -2121,13 +2121,6 @@ function escAttr(s) {
 
 function basename(p) {
   return p.split('/').pop();
-}
-
-function shortLabel(p) {
-  const parts = p.split('/');
-  // Show up to 2 parent segments for context (e.g. "Paladin/Shadows/attack.png")
-  const depth = Math.min(parts.length - 1, 2);
-  return parts.slice(parts.length - 1 - depth).join('/');
 }
 
 async function readAllDimensions(files, onProgress) {
@@ -3527,7 +3520,7 @@ function renderCell(cell, imagePath, index) {
     const pathEl = document.createElement('span');
     pathEl.className = 'list-path';
     pathEl.textContent = relativePath(imagePath);
-    cell.title = imagePath;
+    cell.title = relativePath(imagePath);
     cell.appendChild(pathEl);
     const dimensions = state.dimensions[imagePath];
     if (dimensions) {
@@ -3562,7 +3555,7 @@ function renderCell(cell, imagePath, index) {
 
   const nameEl = document.createElement('div');
   nameEl.className = 'cell-filename';
-  nameEl.textContent = shortLabel(imagePath);
+  nameEl.textContent = relativePath(imagePath);
   nameEl.title = relativePath(imagePath);
   cell.appendChild(nameEl);
 
