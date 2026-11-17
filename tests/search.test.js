@@ -28,6 +28,28 @@ function app() {
 const run = (ctx, code) => vm.runInContext(code, ctx);
 const plain = value => JSON.parse(JSON.stringify(value));
 
+test('display paths stay within the opened folder and preserve paths outside it', () => {
+  const ctx = app();
+  assert.equal(run(ctx, `relativePath('/assets/hero.png')`), 'hero.png');
+  assert.equal(run(ctx, `relativePath('/assets/effects/frame_2.png')`), 'effects/frame_2.png');
+  assert.equal(run(ctx, `relativePath('/assets-other/hero.png')`), '/assets-other/hero.png');
+  assert.equal(run(ctx, `relativePath('/elsewhere/hero.png')`), '/elsewhere/hero.png');
+  run(ctx, `state.baseDirectory = '/assets/';`);
+  assert.equal(run(ctx, `relativePath('/assets/effects/frame_2.png')`), 'effects/frame_2.png');
+  run(ctx, `state.baseDirectory = '/sample-sprites';`);
+  assert.equal(run(ctx, `relativePath('/sample-sprites/Blue Knight.png')`), 'Blue Knight.png');
+});
+
+test('path sort uses relative paths with natural, case-insensitive order in both directions', () => {
+  const ctx = app();
+  run(ctx, `state.allImages = ['/assets/frame_10.png', '/assets/sub/Frame_2.png', '/assets/frame_2.png', '/assets/Frame_1.png'];
+    invalidateVisibleCache(); state.sortBy = 'path'; state.sortDir = 'asc'; applyFilters();`);
+  const ascending = plain(run(ctx, 'state.filteredImages'));
+  assert.deepEqual(ascending, ['/assets/Frame_1.png', '/assets/frame_2.png', '/assets/frame_10.png', '/assets/sub/Frame_2.png']);
+  run(ctx, `state.sortDir = 'desc'; applyFilters();`);
+  assert.deepEqual(plain(run(ctx, 'state.filteredImages')), [...ascending].reverse());
+});
+
 test('sidebar counts each visible image once per tag across overlapping rules and manual tags', () => {
   const ctx = app();
   assert.deepEqual(plain([...ctx.getAllTags()]), [['effect', 2], ['poison', 1]]);

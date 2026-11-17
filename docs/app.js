@@ -13,8 +13,9 @@ const state = {
   zoomLevel: 1,
   dimensions: {},      // path -> { width, height, fileSize, modified }
   dimFilter: null,     // null = no filter, or { min, max } on max(w,h)
-  sortBy: 'name',      // 'name', 'size', 'dimensions', 'modified'
+  sortBy: 'name',      // 'name', 'path', 'size', 'dimensions', 'modified'
   sortDir: 'asc',      // 'asc' or 'desc'
+  viewMode: 'grid',
   capturedRegions: [], // { imageData, width, height, sourceName, id }
 };
 
@@ -89,6 +90,7 @@ class VirtualGrid {
     this.gap = options.gap || 8;
     this.padding = options.padding || 8;
     this.bufferRows = options.bufferRows || 4;
+    this.mode = options.mode || 'grid';
     this.items = [];
     this.onCellRender = options.onCellRender || (() => {});
     this.onCellClick = options.onCellClick || (() => {});
@@ -142,7 +144,7 @@ class VirtualGrid {
     const el = this.renderedCells.get(index);
     if (el) {
       const newEl = el.cloneNode(false);
-      newEl.className = 'grid-cell';
+      newEl.className = 'grid-cell' + (this.mode === 'list' ? ' list-row' : '');
       newEl.style.cssText = el.style.cssText;
       this.onCellRender(newEl, this.items[index], index);
       newEl.addEventListener('click', (e) => this.onCellClick(this.items[index], index, e));
@@ -157,7 +159,7 @@ class VirtualGrid {
     const height = this.scrollEl.clientHeight;
     const scrollTop = this.scrollEl.scrollTop;
 
-    const cols = Math.max(1, Math.floor((width + this.gap) / (this.cellWidth + this.gap)));
+    const cols = this.mode === 'list' ? 1 : Math.max(1, Math.floor((width + this.gap) / (this.cellWidth + this.gap)));
     const rows = Math.ceil(this.items.length / cols);
     const rowHeight = this.cellHeight + this.gap;
     const totalHeight = rows * rowHeight + this.padding * 2;
@@ -198,20 +200,21 @@ class VirtualGrid {
         if (idx >= this.items.length) break;
         if (this.renderedCells.has(idx)) {
           // Reposition if columns changed
-          if (cols !== this.prevCols) {
+          if (cols !== this.prevCols || this.mode === 'list') {
             const el = this.renderedCells.get(idx);
             el.style.left = (leftOffset + c * (this.cellWidth + this.gap)) + 'px';
             el.style.top = (topOffset + r * rowHeight) + 'px';
+            el.style.width = (this.mode === 'list' ? Math.max(0, width) : this.cellWidth) + 'px';
           }
           continue;
         }
 
         const cell = document.createElement('div');
-        cell.className = 'grid-cell';
+        cell.className = 'grid-cell' + (this.mode === 'list' ? ' list-row' : '');
         cell.style.position = 'absolute';
         cell.style.left = (leftOffset + c * (this.cellWidth + this.gap)) + 'px';
         cell.style.top = (topOffset + r * rowHeight) + 'px';
-        cell.style.width = this.cellWidth + 'px';
+        cell.style.width = (this.mode === 'list' ? Math.max(0, width) : this.cellWidth) + 'px';
         cell.style.height = this.cellHeight + 'px';
 
         this.onCellRender(cell, this.items[idx], idx);
@@ -231,6 +234,15 @@ class VirtualGrid {
 
   scrollToTop() {
     this.scrollEl.scrollTop = 0;
+  }
+
+  setMode(mode) {
+    if (this.mode === mode) return;
+    this.mode = mode;
+    this.cellHeight = mode === 'list' ? 40 : 160;
+    this.gap = mode === 'list' ? 2 : 8;
+    this.container.classList.toggle('list-mode', mode === 'list');
+    this.setItems(this.items);
   }
 
   scrollToIndex(index) {
@@ -683,10 +695,11 @@ function restoreSavedView(view) {
   updateDimFilterUI();
 
   // Update sort UI
-  const sortSelect = document.getElementById('sort-select');
-  const sortDirBtn = document.getElementById('sort-dir-btn');
+  const sortSelect = document.getElementById('sort-by');
+  const sortDirBtn = document.getElementById('sort-dir');
   if (sortSelect) sortSelect.value = state.sortBy;
   if (sortDirBtn) sortDirBtn.textContent = state.sortDir === 'asc' ? '\u25B2' : '\u25BC';
+  updatePathHeader();
 
   updateGrid();
   renderSavedSearches();
@@ -729,7 +742,7 @@ function renderSavedSearches() {
 
 function buildSavedSearchTooltip(s) {
   const parts = [];
-  if (s.searchQuery) parts.push(`Search: ${s.searchQuery}`);
+  if (s.searchQuery) parts.push(`Search: ${relativePath(s.searchQuery)}`);
   if (s.currentFilter && s.currentFilter !== 'all') parts.push(`Tag: ${s.currentFilter}`);
   if (s.dimFilter) parts.push(`Size: ${s.dimFilter.min}-${s.dimFilter.max}`);
   if (s.sortBy !== 'name') parts.push(`Sort: ${s.sortBy}`);
@@ -901,6 +914,8 @@ function applyFilters() {
       switch (state.sortBy) {
         case 'name':
           return dir * a.localeCompare(b);
+        case 'path':
+          return dir * compareImagePaths(a, b);
         case 'size': {
           const sa = dims[a]?.fileSize || 0;
           const sb = dims[b]?.fileSize || 0;
@@ -926,10 +941,14 @@ function applyFilters() {
 }
 
 function relativePath(img) {
-  if (state.baseDirectory && img.startsWith(state.baseDirectory)) {
-    return img.slice(state.baseDirectory.length + 1);
-  }
-  return img;
+  if (!state.baseDirectory) return img;
+  const base = state.baseDirectory.replace(/\/+$/, '') || '/';
+  const prefix = base === '/' ? '/' : base + '/';
+  return img.startsWith(prefix) ? img.slice(prefix.length) : img;
+}
+
+function compareImagePaths(a, b) {
+  return relativePath(a).localeCompare(relativePath(b), undefined, { sensitivity: 'base', numeric: true });
 }
 
 function getTagsForImage(img) {
@@ -1199,7 +1218,7 @@ function updateDetailPanel() {
     img.src = toFileUrl(imagePath);
 
     filenameEl.textContent = basename(imagePath);
-    pathEl.textContent = relativePath(imagePath);
+    pathEl.textContent = imagePath;
     excludeBtn.textContent = 'Exclude This Image';
 
     metaEl.textContent = '';
@@ -2102,13 +2121,6 @@ function escAttr(s) {
 
 function basename(p) {
   return p.split('/').pop();
-}
-
-function shortLabel(p) {
-  const parts = p.split('/');
-  // Show up to 2 parent segments for context (e.g. "Paladin/Shadows/attack.png")
-  const depth = Math.min(parts.length - 1, 2);
-  return parts.slice(parts.length - 1 - depth).join('/');
 }
 
 async function readAllDimensions(files, onProgress) {
@@ -3502,8 +3514,34 @@ function setupBgModeBar(barId, wrapperId, colorInputId, persistKey) {
 // ===== Cell Rendering =====
 function renderCell(cell, imagePath, index) {
   cell.dataset.imagePath = imagePath;
-  const tags = getTagsForImage(imagePath);
   if (state.selectedImages.has(imagePath)) cell.classList.add('selected');
+
+  if (state.viewMode === 'list') {
+    const pathEl = document.createElement('span');
+    pathEl.className = 'list-path';
+    pathEl.textContent = relativePath(imagePath);
+    cell.title = relativePath(imagePath);
+    cell.appendChild(pathEl);
+    const dimensions = state.dimensions[imagePath];
+    if (dimensions) {
+      const info = document.createElement('span');
+      info.className = 'list-info';
+      info.textContent = `${dimensions.width} × ${dimensions.height}${dimensions.fileSize ? ' · ' + Math.max(1, Math.round(dimensions.fileSize / 1024)) + ' KB' : ''}`;
+      cell.appendChild(info);
+    }
+    const wrapper = document.createElement('div');
+    wrapper.className = 'cell-image-wrapper list-thumbnail';
+    const img = document.createElement('img');
+    img.src = toFileUrl(imagePath);
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.alt = '';
+    wrapper.appendChild(img);
+    cell.appendChild(wrapper);
+    return;
+  }
+
+  const tags = getTagsForImage(imagePath);
 
   const wrapper = document.createElement('div');
   wrapper.className = 'cell-image-wrapper';
@@ -3517,7 +3555,7 @@ function renderCell(cell, imagePath, index) {
 
   const nameEl = document.createElement('div');
   nameEl.className = 'cell-filename';
-  nameEl.textContent = shortLabel(imagePath);
+  nameEl.textContent = relativePath(imagePath);
   nameEl.title = relativePath(imagePath);
   cell.appendChild(nameEl);
 
@@ -4240,13 +4278,56 @@ function setupSort() {
 
   select.addEventListener('change', () => {
     state.sortBy = select.value;
+    updatePathHeader();
     updateGrid();
   });
 
   dirBtn.addEventListener('click', () => {
     state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
     dirBtn.textContent = state.sortDir === 'asc' ? '\u25B2' : '\u25BC';
+    updatePathHeader();
     updateGrid();
+  });
+
+  document.getElementById('path-header').addEventListener('click', () => {
+    state.sortDir = state.sortBy === 'path' && state.sortDir === 'asc' ? 'desc' : 'asc';
+    state.sortBy = 'path';
+    select.value = 'path';
+    dirBtn.textContent = state.sortDir === 'asc' ? '\u25B2' : '\u25BC';
+    updatePathHeader();
+    updateGrid();
+  });
+  document.querySelectorAll('[data-view-mode]').forEach(button => button.addEventListener('click', () => {
+    const mode = button.dataset.viewMode;
+    if (state.viewMode === mode) return;
+    state.viewMode = mode;
+    state.metadata.viewMode = mode;
+    scheduleSave();
+    if (mode === 'list') {
+      state.sortBy = 'path';
+      state.sortDir = 'asc';
+      select.value = 'path';
+      dirBtn.textContent = '\u25B2';
+    }
+    grid.setMode(mode);
+    updateViewModeControls();
+    updatePathHeader();
+    updateGrid();
+  }));
+}
+
+function updatePathHeader() {
+  const header = document.getElementById('path-header');
+  if (!header) return;
+  header.textContent = `Path ${state.sortBy === 'path' ? (state.sortDir === 'asc' ? '▲' : '▼') : ''}`;
+  header.setAttribute('aria-sort', state.sortBy === 'path' ? (state.sortDir === 'asc' ? 'ascending' : 'descending') : 'none');
+}
+
+function updateViewModeControls() {
+  document.querySelectorAll('[data-view-mode]').forEach(button => {
+    const active = button.dataset.viewMode === state.viewMode;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
   });
 }
 
@@ -4263,6 +4344,11 @@ function updateDimFilterUI() {
 async function init() {
   // Load metadata
   state.metadata = migrateMetadata(await window.api.loadMetadata());
+  state.viewMode = state.metadata.viewMode === 'list' ? 'list' : 'grid';
+  if (state.viewMode === 'list') {
+    state.sortBy = 'path';
+    document.getElementById('sort-by').value = 'path';
+  }
 
   // Setup grid
   grid = new VirtualGrid(document.getElementById('grid-container'), {
@@ -4283,6 +4369,9 @@ async function init() {
       openCarousel(items, startIdx >= 0 ? startIdx : 0);
     },
   });
+  grid.setMode(state.viewMode);
+  updateViewModeControls();
+  updatePathHeader();
 
   galleryHoverPreview = setupGalleryHoverPreview();
 
