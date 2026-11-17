@@ -519,6 +519,7 @@ html, body {
 /* === Grid === */
 #grid-container {
   flex: 1;
+  min-width: 240px;
   overflow: hidden;
   position: relative;
   user-select: none;
@@ -641,7 +642,9 @@ html, body {
 /* === Detail Panel === */
 #detail-panel {
   width: var(--detail-width);
-  min-width: var(--detail-width);
+  min-width: 0;
+  flex: 0 0 var(--detail-width);
+  position: relative;
   background: var(--surface);
   border-left: 1px solid var(--border);
   display: flex;
@@ -649,6 +652,32 @@ html, body {
   overflow-y: auto;
   transition: margin-right 0.2s;
 }
+
+#detail-resize-handle {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 10px;
+  z-index: 5;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+#detail-resize-handle::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 3px;
+  width: 3px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+
+#detail-resize-handle:hover::after,
+#detail-resize-handle:focus-visible::after,
+#detail-panel.resizing #detail-resize-handle::after { opacity: 1; }
+
+#detail-content { flex-shrink: 0; }
 
 #detail-content.hidden {
   display: none;
@@ -681,6 +710,7 @@ html, body {
 
 #detail-image-wrapper {
   width: 100%;
+  flex: none;
   aspect-ratio: 1;
   display: flex;
   align-items: center;
@@ -749,7 +779,6 @@ html, body {
   left: 0;
   transform-origin: 0 0;
   image-rendering: pixelated;
-  image-rendering: crisp-edges;
   will-change: transform;
   pointer-events: none;
   user-select: none;

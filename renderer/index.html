@@ -137,6 +137,7 @@
 
     <!-- Detail Panel (always visible) -->
     <div id="detail-panel">
+      <div id="detail-resize-handle" role="separator" aria-label="Resize detail panel" aria-orientation="vertical" tabindex="0" title="Drag to resize detail panel"></div>
       <div id="detail-empty" class="detail-empty-state">
         <div class="detail-empty-icon">&#9698;</div>
         <div>Select an image to view details</div>
@@ -161,8 +162,8 @@
           <div id="detail-filename-row">
             <div id="detail-filename"></div>
             <button id="btn-copy-name" class="btn-icon" title="Copy filename">&#9112;</button>
-            <button id="btn-copy-path" class="btn-icon" title="Copy file path">&#128194;</button>
-            <button id="btn-reveal" class="btn-icon" title="Open containing folder">&#128193;</button>
+            <button id="btn-copy-path" class="btn-icon" title="Copy file path">&#128193;</button>
+            <button id="btn-reveal" class="btn-icon" title="Open containing folder">&#128194;</button>
           </div>
           <div id="detail-path"></div>
           <div id="detail-meta"></div>
@@ -188,8 +189,8 @@
         <span id="carousel-counter"></span>
         <div class="carousel-titlebar-spacer"></div>
         <button id="carousel-copy-file" class="carousel-titlebar-btn carousel-text-btn" title="Copy file to clipboard">&#128203; Copy File</button>
-        <button id="carousel-copy-path" class="carousel-titlebar-btn carousel-text-btn" title="Copy file path">&#128194; Copy Path</button>
-        <button id="carousel-reveal" class="carousel-titlebar-btn carousel-text-btn" title="Open containing folder">&#128193; Open Folder</button>
+        <button id="carousel-copy-path" class="carousel-titlebar-btn carousel-text-btn" title="Copy file path">&#128193; Copy Path</button>
+        <button id="carousel-reveal" class="carousel-titlebar-btn carousel-text-btn" title="Open containing folder">&#128194; Open Folder</button>
         <button id="carousel-sprite-toggle" class="carousel-titlebar-btn carousel-text-btn" title="Animation frame tools">&#9638; Frames</button>
         <button id="carousel-region-toggle" class="carousel-titlebar-btn carousel-text-btn" title="Select region">&#9645; Region</button>
         <fieldset class="bg-mode-fieldset">
