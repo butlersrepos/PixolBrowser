@@ -111,6 +111,49 @@ test('plain search words match every term in any order, while quotes keep a phra
   }
 });
 
+test('name filters match cached file names, not folder names, and combine with other terms', () => {
+  const ctx = app();
+  run(ctx, `
+    state.allImages = [
+      '/assets/card/hero.png', '/assets/card/back.png',
+      '/assets/other/card_back.png', '/assets/other/card back.png'
+    ];
+    activeConfig().tags = { '/assets/other/card_back.png': ['deck'] };
+    activeConfig().autoTagRules = [];
+    activeConfig().excludePatterns = [];
+    invalidateVisibleCache();
+    lowercaseBasenameIndex = new Map(state.allImages.map(path => [path, basename(path).toLowerCase()]));
+    basename = () => { throw Error('Rebuilt file name during search'); };
+  `);
+  for (const [query, expected] of [
+    ['name:card', ['/assets/other/card_back.png', '/assets/other/card back.png']],
+    ['n:CARD', ['/assets/other/card_back.png', '/assets/other/card back.png']],
+    ['name:card n:back', ['/assets/other/card_back.png', '/assets/other/card back.png']],
+    ['name:"card back"', ['/assets/other/card back.png']],
+    ['n:"card back"', ['/assets/other/card back.png']],
+    ['name:hero', ['/assets/card/hero.png']],
+    ['other name:card t:deck', ['/assets/other/card_back.png']],
+  ]) {
+    ctx.query = query;
+    run(ctx, 'state.searchQuery = query; applyFilters();');
+    assert.deepEqual(plain(run(ctx, 'state.filteredImages')), expected, query);
+  }
+});
+
+test('every filter has unique aliases and long and short forms parse alike', () => {
+  const ctx = app();
+  run(ctx, 'Date.now = () => 1700000000000;');
+  const aliases = plain(run(ctx, 'SEARCH_FILTERS.flatMap(filter => [filter.long, filter.short])'));
+  assert.equal(new Set(aliases).size, aliases.length);
+  for (const [long, short, value] of [
+    ['name', 'n', 'card'], ['tag', 't', 'effect'], ['size', 's', 'small'],
+    ['date', 'd', 'week'], ['type', 'f', 'png'],
+  ]) {
+    assert.deepEqual(plain(run(ctx, `parseSearchQuery('${long}:${value}')`)),
+      plain(run(ctx, `parseSearchQuery('${short}:${value}')`)), long);
+  }
+});
+
 test('changing sort order does not mutate the cached collection order', () => {
   const ctx = app();
   const original = [...ctx.getVisibleImages()];

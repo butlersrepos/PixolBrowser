@@ -56,6 +56,7 @@ function migrateMetadata(m) {
 }
 let cachedVisibleImages = null; // images after excludes, before tag/search filters
 let lowercaseIndex = null; // Map<imagePath, lowercasedPath> for fast search
+let lowercaseBasenameIndex = null; // Map<imagePath, lowercased file name>
 const cachedImageTags = new Map();
 let cachedAutoTagRules = null;
 let cachedTagSummary = null;
@@ -784,7 +785,7 @@ function hideSearchHistory() {
 }
 
 // ===== Omni Search Parser =====
-// Parse search query for prefix modifiers: t:tag, s:size, d:date, f:format
+// Long and short prefixes share this table with the search help window.
 const DIM_PRESETS = {
   tiny: { min: 0, max: 32 },
   small: { min: 33, max: 64 },
@@ -795,38 +796,52 @@ const DIM_PRESETS = {
   xl: { min: 257, max: Infinity },
 };
 
+const SEARCH_FILTERS = [
+  { key: 'names', long: 'name', short: 'n', example: 'name:card', description: 'File name only' },
+  { key: 'tags', long: 'tag', short: 't', example: 'tag:hero', description: 'Image tags' },
+  { key: 'dims', long: 'size', short: 's', example: 'size:small', description: 'Width or height' },
+  { key: 'dateFilter', long: 'date', short: 'd', example: 'date:week', description: 'Date modified' },
+  { key: 'fileTypes', long: 'type', short: 'f', example: 'type:png', description: 'File extension' },
+];
+const SEARCH_FILTER_BY_ALIAS = new Map(SEARCH_FILTERS.flatMap(filter => [
+  [filter.long, filter], [filter.short, filter],
+]));
+
 function parseSearchQuery(raw) {
-  const result = { text: '', textTerms: [], tags: [], dims: null, fileTypes: [], dateFilter: null };
+  const result = { text: '', textTerms: [], names: [], tags: [], dims: null, fileTypes: [], dateFilter: null };
   const parts = raw.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
   const textParts = [];
   for (const part of parts) {
-    const lower = part.toLowerCase();
-    if (lower.startsWith('t:')) {
-      const val = part.slice(2).replace(/^"|"$/g, '');
+    const colon = part.indexOf(':');
+    const filter = colon > 0 ? SEARCH_FILTER_BY_ALIAS.get(part.slice(0, colon).toLowerCase()) : null;
+    const val = filter ? part.slice(colon + 1).replace(/^"|"$/g, '') : '';
+    if (filter?.key === 'names') {
+      if (val) result.names.push(val.toLowerCase());
+    } else if (filter?.key === 'tags') {
       if (val) result.tags.push(val.toLowerCase());
-    } else if (lower.startsWith('s:')) {
-      const val = part.slice(2).toLowerCase();
-      if (DIM_PRESETS[val]) {
-        result.dims = DIM_PRESETS[val];
+    } else if (filter?.key === 'dims') {
+      const size = val.toLowerCase();
+      if (DIM_PRESETS[size]) {
+        result.dims = DIM_PRESETS[size];
       } else {
-        const rangeMatch = val.match(/^(\d+)\s*-\s*(\d+)$/);
+        const rangeMatch = size.match(/^(\d+)\s*-\s*(\d+)$/);
         if (rangeMatch) {
           result.dims = { min: parseInt(rangeMatch[1]), max: parseInt(rangeMatch[2]) };
         }
       }
-    } else if (lower.startsWith('f:')) {
-      const val = part.slice(2).toLowerCase().replace(/^\./, '');
-      if (val) result.fileTypes.push('.' + val);
-    } else if (lower.startsWith('d:')) {
-      const val = part.slice(2).toLowerCase();
-      if (val === 'recent' || val === 'today') {
+    } else if (filter?.key === 'fileTypes') {
+      const type = val.toLowerCase().replace(/^\./, '');
+      if (type) result.fileTypes.push('.' + type);
+    } else if (filter?.key === 'dateFilter') {
+      const date = val.toLowerCase();
+      if (date === 'recent' || date === 'today') {
         result.dateFilter = Date.now() - 24 * 60 * 60 * 1000;
-      } else if (val === 'week') {
+      } else if (date === 'week') {
         result.dateFilter = Date.now() - 7 * 24 * 60 * 60 * 1000;
-      } else if (val === 'month') {
+      } else if (date === 'month') {
         result.dateFilter = Date.now() - 30 * 24 * 60 * 60 * 1000;
-      } else if (val.startsWith('>')) {
-        const ts = Date.parse(val.slice(1));
+      } else if (date.startsWith('>')) {
+        const ts = Date.parse(date.slice(1));
         if (!isNaN(ts)) result.dateFilter = ts;
       }
     } else {
@@ -836,6 +851,47 @@ function parseSearchQuery(raw) {
   }
   result.text = textParts.join(' ').trim();
   return result;
+}
+
+function showSearchHelp() {
+  const rows = document.getElementById('search-help-rows');
+  rows.replaceChildren();
+  const helpRows = [
+    { long: 'Words', short: '—', example: 'back card', description: 'All, any order' },
+    { long: '"phrase"', short: '—', example: '"back card"', description: 'Exact path phrase' },
+    ...SEARCH_FILTERS.map(filter => ({
+      ...filter,
+      description: filter.key === 'dims'
+        ? `${Object.keys(DIM_PRESETS).join(' · ')} · 32-64`
+        : filter.key === 'dateFilter'
+          ? 'today · week · month · >YYYY-MM-DD'
+          : filter.description,
+    })),
+  ];
+  for (const row of helpRows) {
+    const tr = document.createElement('tr');
+    for (const value of [row.long, row.short]) {
+      const cell = document.createElement('td');
+      cell.textContent = value;
+      tr.appendChild(cell);
+    }
+    const exampleCell = document.createElement('td');
+    const example = document.createElement('button');
+    example.className = 'search-help-example';
+    example.textContent = row.example;
+    example.dataset.query = row.example;
+    exampleCell.appendChild(example);
+    tr.appendChild(exampleCell);
+    const description = document.createElement('td');
+    description.textContent = row.description;
+    tr.appendChild(description);
+    rows.appendChild(tr);
+  }
+  document.getElementById('search-help-modal').classList.remove('hidden');
+}
+
+function hideSearchHelp() {
+  document.getElementById('search-help-modal').classList.add('hidden');
 }
 
 function applyFilters() {
@@ -856,6 +912,13 @@ function applyFilters() {
     images = images.filter(img => {
       const path = lowercaseIndex?.get(img) || img.toLowerCase();
       return parsed.textTerms.every(term => path.includes(term));
+    });
+  }
+
+  if (parsed?.names.length) {
+    images = images.filter(img => {
+      const name = lowercaseBasenameIndex?.get(img) ?? basename(img).toLowerCase();
+      return parsed.names.every(term => name.includes(term));
     });
   }
 
@@ -4346,6 +4409,19 @@ async function init() {
     updateGrid();
   });
 
+  const searchHelp = document.getElementById('search-help-modal');
+  document.getElementById('btn-search-help').addEventListener('click', showSearchHelp);
+  searchHelp.querySelector('.modal-backdrop').addEventListener('click', hideSearchHelp);
+  searchHelp.querySelector('.modal-close').addEventListener('click', hideSearchHelp);
+  searchHelp.querySelector('#search-help-rows').addEventListener('click', (e) => {
+    const example = e.target.closest('[data-query]');
+    if (!example) return;
+    searchInput.value = example.dataset.query;
+    searchClear.classList.remove('hidden');
+    hideSearchHelp();
+    applySearchInput();
+  });
+
   document.getElementById('btn-rules').addEventListener('click', showRulesModal);
 
   // Sidebar "All" and "Untagged" clicks
@@ -4520,7 +4596,9 @@ async function init() {
     }
 
     if (e.key === 'Escape') {
-      if (!document.getElementById('settings-modal').classList.contains('hidden')) {
+      if (!searchHelp.classList.contains('hidden')) {
+        hideSearchHelp();
+      } else if (!document.getElementById('settings-modal').classList.contains('hidden')) {
         hideSettingsModal();
       } else if (!document.getElementById('open-modal').classList.contains('hidden')) {
         hideOpenModal();
@@ -4749,8 +4827,10 @@ async function scanDirectory(dirPath, recursive) {
     state.allImages = files.sort();
     // Build lowercase index for fast search
     lowercaseIndex = new Map();
+    lowercaseBasenameIndex = new Map();
     for (const img of state.allImages) {
       lowercaseIndex.set(img, img.toLowerCase());
+      lowercaseBasenameIndex.set(img, basename(img).toLowerCase());
     }
     invalidateVisibleCache();
     state.currentFilter = 'all';
