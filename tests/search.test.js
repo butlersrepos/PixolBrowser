@@ -83,6 +83,34 @@ test('dimension and format modifiers remain composable with tag and text searche
   assert.deepEqual(plain(run(ctx,'state.filteredImages')),['/assets/effects/poison.png']);
 });
 
+test('plain search words match every term in any order, while quotes keep a phrase', () => {
+  const ctx = app();
+  run(ctx, `
+    state.allImages = [
+      '/assets/card_back.png', '/assets/back/card.png',
+      '/assets/cards/backs/x.png', '/assets/back card.png',
+      '/assets/card.png'
+    ];
+    activeConfig().tags = { '/assets/card_back.png': ['deck'] };
+    activeConfig().autoTagRules = [];
+    activeConfig().excludePatterns = [];
+    invalidateVisibleCache();
+    lowercaseIndex = new Map(state.allImages.map(path => [path, path.toLowerCase()]));
+  `);
+  for (const [query, expected] of [
+    ['back card', ['/assets/card_back.png', '/assets/back/card.png', '/assets/cards/backs/x.png', '/assets/back card.png']],
+    ['card back', ['/assets/card_back.png', '/assets/back/card.png', '/assets/cards/backs/x.png', '/assets/back card.png']],
+    ['"back card"', ['/assets/back card.png']],
+    ['missing card', []],
+    ['card', ['/assets/card_back.png', '/assets/back/card.png', '/assets/cards/backs/x.png', '/assets/back card.png', '/assets/card.png']],
+    ['back card t:deck', ['/assets/card_back.png']]
+  ]) {
+    ctx.query = query;
+    run(ctx, 'state.searchQuery = query; applyFilters();');
+    assert.deepEqual(plain(run(ctx, 'state.filteredImages')), expected, query);
+  }
+});
+
 test('changing sort order does not mutate the cached collection order', () => {
   const ctx = app();
   const original = [...ctx.getVisibleImages()];

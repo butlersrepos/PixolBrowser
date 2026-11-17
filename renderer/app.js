@@ -796,7 +796,7 @@ const DIM_PRESETS = {
 };
 
 function parseSearchQuery(raw) {
-  const result = { text: '', tags: [], dims: null, fileTypes: [], dateFilter: null };
+  const result = { text: '', textTerms: [], tags: [], dims: null, fileTypes: [], dateFilter: null };
   const parts = raw.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
   const textParts = [];
   for (const part of parts) {
@@ -831,6 +831,7 @@ function parseSearchQuery(raw) {
       }
     } else {
       textParts.push(part);
+      result.textTerms.push(part.replace(/^"|"$/g, '').toLowerCase());
     }
   }
   result.text = textParts.join(' ').trim();
@@ -851,9 +852,11 @@ function applyFilters() {
   const parsed = state.searchQuery ? parseSearchQuery(state.searchQuery) : null;
 
   // Search text filter (path matching)
-  if (parsed?.text) {
-    const q = parsed.text.toLowerCase();
-    images = images.filter(img => (lowercaseIndex?.get(img) || img.toLowerCase()).includes(q));
+  if (parsed?.textTerms.length) {
+    images = images.filter(img => {
+      const path = lowercaseIndex?.get(img) || img.toLowerCase();
+      return parsed.textTerms.every(term => path.includes(term));
+    });
   }
 
   // Tag prefix filter (t:)
