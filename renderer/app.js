@@ -5,7 +5,8 @@ const state = {
   allImages: [],       // All PNG paths found
   filteredImages: [],  // After filters/exclusions
   metadata: null,      // Persisted metadata
-  currentFilter: 'all',
+  activeTags: new Set(),
+  untaggedFilter: false,
   searchQuery: '',
   selectedImages: new Set(),
   lastClickedIndex: -1,  // for shift+click range select
@@ -668,7 +669,8 @@ function saveCurrentView() {
   const view = {
     name: name.trim(),
     searchQuery: state.searchQuery || '',
-    currentFilter: state.currentFilter || 'all',
+    activeTags: [...state.activeTags],
+    untaggedFilter: state.untaggedFilter,
     dimFilter: state.dimFilter ? { ...state.dimFilter } : null,
     sortBy: state.sortBy,
     sortDir: state.sortDir,
@@ -683,7 +685,15 @@ function saveCurrentView() {
 function restoreSavedView(view) {
   cancelPendingSearch();
   state.searchQuery = view.searchQuery || '';
-  state.currentFilter = view.currentFilter || 'all';
+  // Older saved views stored one tag (or Untagged) in currentFilter.
+  state.activeTags = new Set(Array.isArray(view.activeTags)
+    ? view.activeTags
+    : view.currentFilter && !['all', 'untagged'].includes(view.currentFilter)
+      ? [view.currentFilter] : []);
+  state.untaggedFilter = Array.isArray(view.activeTags)
+    ? Boolean(view.untaggedFilter)
+    : view.currentFilter === 'untagged';
+  if (state.untaggedFilter) state.activeTags.clear();
   state.dimFilter = view.dimFilter || null;
   state.sortBy = view.sortBy || 'name';
   state.sortDir = view.sortDir || 'asc';
@@ -743,7 +753,10 @@ function renderSavedSearches() {
 function buildSavedSearchTooltip(s) {
   const parts = [];
   if (s.searchQuery) parts.push(`Search: ${relativePath(s.searchQuery)}`);
-  if (s.currentFilter && s.currentFilter !== 'all') parts.push(`Tag: ${s.currentFilter}`);
+  const tags = Array.isArray(s.activeTags) ? s.activeTags
+    : s.currentFilter && !['all', 'untagged'].includes(s.currentFilter) ? [s.currentFilter] : [];
+  if (tags.length) parts.push(`Tags: ${tags.join(', ')}`);
+  if (s.untaggedFilter || s.currentFilter === 'untagged') parts.push('Untagged');
   if (s.dimFilter) parts.push(`Size: ${s.dimFilter.min}-${s.dimFilter.max}`);
   if (s.sortBy !== 'name') parts.push(`Sort: ${s.sortBy}`);
   return parts.join(' | ') || 'All images';
@@ -854,10 +867,13 @@ function applyFilters() {
   let images = getVisibleImages();
 
   // Tag filter (sidebar)
-  if (state.currentFilter === 'untagged') {
+  if (state.untaggedFilter) {
     images = images.filter(img => !getTagsForImage(img).length);
-  } else if (state.currentFilter !== 'all') {
-    images = images.filter(img => getTagsForImage(img).includes(state.currentFilter));
+  } else if (state.activeTags.size) {
+    images = images.filter(img => {
+      const tags = getTagsForImage(img);
+      return [...state.activeTags].every(tag => tags.includes(tag));
+    });
   }
 
   // Parse omni search
@@ -1023,6 +1039,7 @@ function updateGrid() {
     grid.setItems(state.filteredImages);
   }
   updateSidebar();
+  activateFilter();
   updateStatus();
 }
 
@@ -1041,7 +1058,7 @@ function updateSidebar() {
   const sorted = [...state.allTags.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   for (const [tag, count] of sorted) {
     const item = document.createElement('div');
-    item.className = 'tag-item' + (state.currentFilter === tag ? ' active' : '');
+    item.className = 'tag-item' + (state.activeTags.has(tag) ? ' active' : '');
     item.dataset.filter = tag;
     item.innerHTML = `
       <span class="tag-color-dot" style="background: ${tagColor(tag)}"></span>
@@ -1049,7 +1066,7 @@ function updateSidebar() {
       <span class="tag-count">${count}</span>
     `;
     item.addEventListener('click', () => {
-      state.currentFilter = tag;
+      toggleTagFilter(tag);
       activateFilter();
       updateGrid();
     });
@@ -1094,7 +1111,7 @@ function showTagContextMenu(e, tag, count) {
       activeConfig().autoTagRules = activeConfig().autoTagRules.filter(r => r.tags.length > 0);
       invalidateTagCache();
       scheduleSave();
-      if (state.currentFilter === tag) state.currentFilter = 'all';
+      state.activeTags.delete(tag);
       updateGrid();
       updateDetailTags();
     }
@@ -1109,8 +1126,71 @@ function showTagContextMenu(e, tag, count) {
 
 function activateFilter() {
   document.querySelectorAll('.tag-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.filter === state.currentFilter);
+    const filter = el.dataset.filter;
+    el.classList.toggle('active', filter === 'all'
+      ? !state.untaggedFilter && state.activeTags.size === 0
+      : filter === 'untagged' ? state.untaggedFilter : state.activeTags.has(filter));
   });
+  renderActiveTagFilters();
+}
+
+function toggleTagFilter(tag) {
+  state.untaggedFilter = false;
+  if (state.activeTags.has(tag)) state.activeTags.delete(tag);
+  else state.activeTags.add(tag);
+}
+
+function selectSidebarFilter(filter) {
+  if (filter === 'all') {
+    state.activeTags.clear();
+    state.untaggedFilter = false;
+  } else if (filter === 'untagged') {
+    state.activeTags.clear();
+    state.untaggedFilter = !state.untaggedFilter;
+  }
+}
+
+function renderActiveTagFilters() {
+  const bar = document.getElementById('active-tag-filters');
+  if (!bar) return;
+  bar.replaceChildren();
+  bar.classList.toggle('hidden', !state.activeTags.size && !state.untaggedFilter);
+  const filters = state.untaggedFilter ? ['untagged'] : [...state.activeTags];
+  for (const tag of filters) {
+    const chip = document.createElement('span');
+    chip.className = 'active-tag-chip';
+    chip.style.background = tag === 'untagged' ? 'var(--card)' : tagBg(tag);
+    chip.style.color = tag === 'untagged' ? 'var(--text)' : tagColor(tag);
+    const name = document.createElement('button');
+    name.className = 'active-tag-name';
+    name.textContent = tag === 'untagged' ? 'Untagged' : tag;
+    name.title = tag === 'untagged' ? 'Show Untagged in the sidebar' : `Show ${tag} in the sidebar`;
+    name.addEventListener('click', () => {
+      const item = [...document.querySelectorAll('.tag-item')].find(el => el.dataset.filter === tag);
+      item?.scrollIntoView({ block: 'nearest' });
+    });
+    const remove = document.createElement('button');
+    remove.className = 'active-tag-remove';
+    remove.textContent = '×';
+    remove.setAttribute('aria-label', `Remove ${name.textContent} filter`);
+    remove.addEventListener('click', () => {
+      if (tag === 'untagged') state.untaggedFilter = false;
+      else state.activeTags.delete(tag);
+      updateGrid();
+    });
+    chip.append(name, remove);
+    bar.appendChild(chip);
+  }
+  if (filters.length) {
+    const clear = document.createElement('button');
+    clear.className = 'active-tags-clear';
+    clear.textContent = 'Clear all';
+    clear.addEventListener('click', () => {
+      selectSidebarFilter('all');
+      updateGrid();
+    });
+    bar.appendChild(clear);
+  }
 }
 
 function updateStatus() {
@@ -4568,7 +4648,7 @@ async function init() {
   // Sidebar "All" and "Untagged" clicks
   document.querySelectorAll('#tag-list > .tag-item').forEach(item => {
     item.addEventListener('click', () => {
-      state.currentFilter = item.dataset.filter;
+      selectSidebarFilter(item.dataset.filter);
       activateFilter();
       updateGrid();
     });
@@ -4971,7 +5051,7 @@ async function scanDirectory(dirPath, recursive) {
       lowercaseIndex.set(img, img.toLowerCase());
     }
     invalidateVisibleCache();
-    state.currentFilter = 'all';
+    selectSidebarFilter('all');
     state.searchQuery = '';
     state.dimFilter = null;
     document.getElementById('search-input').value = '';
