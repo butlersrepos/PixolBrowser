@@ -3535,6 +3535,72 @@ function renderCell(cell, imagePath, index) {
   }
 }
 
+// ===== Detail Panel Width =====
+const DETAIL_DEFAULT_WIDTH = 340;
+const GRID_MIN_WIDTH = 240;
+
+function setupDetailResize() {
+  const panel = document.getElementById('detail-panel');
+  const handle = document.getElementById('detail-resize-handle');
+  const main = document.getElementById('main');
+  const sidebar = document.getElementById('sidebar');
+  const savedWidth = Number(state.metadata.detailPanelWidth);
+  let preferredWidth = Number.isFinite(savedWidth) && savedWidth >= DETAIL_DEFAULT_WIDTH
+    ? savedWidth : DETAIL_DEFAULT_WIDTH;
+  let startX = 0;
+  let startWidth = 0;
+
+  function maximumWidth() {
+    return Math.max(0, main.clientWidth - sidebar.getBoundingClientRect().width - GRID_MIN_WIDTH);
+  }
+
+  function applyWidth() {
+    const maximum = maximumWidth();
+    const width = Math.min(Math.max(DETAIL_DEFAULT_WIDTH, preferredWidth), maximum);
+    panel.style.setProperty('--detail-width', `${width}px`);
+    handle.setAttribute('aria-valuemin', String(Math.min(DETAIL_DEFAULT_WIDTH, maximum)));
+    handle.setAttribute('aria-valuemax', String(maximum));
+    handle.setAttribute('aria-valuenow', String(Math.round(width)));
+  }
+
+  function saveWidth() {
+    state.metadata.detailPanelWidth = preferredWidth;
+    scheduleSave();
+  }
+
+  handle.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    handle.setPointerCapture(event.pointerId);
+    startX = event.clientX;
+    startWidth = panel.getBoundingClientRect().width;
+    panel.classList.add('resizing');
+  });
+  handle.addEventListener('pointermove', (event) => {
+    if (!handle.hasPointerCapture(event.pointerId)) return;
+    preferredWidth = Math.max(DETAIL_DEFAULT_WIDTH, Math.min(maximumWidth(), startWidth + startX - event.clientX));
+    applyWidth();
+  });
+  handle.addEventListener('pointerup', (event) => {
+    if (!handle.hasPointerCapture(event.pointerId)) return;
+    handle.releasePointerCapture(event.pointerId);
+    panel.classList.remove('resizing');
+    saveWidth();
+  });
+  handle.addEventListener('pointercancel', () => panel.classList.remove('resizing'));
+  handle.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    event.stopPropagation();
+    preferredWidth = Math.max(DETAIL_DEFAULT_WIDTH, Math.min(maximumWidth(),
+      panel.getBoundingClientRect().width + (event.key === 'ArrowLeft' ? 20 : -20)));
+    applyWidth();
+    saveWidth();
+  });
+  window.addEventListener('resize', applyWidth);
+  applyWidth();
+}
+
 // ===== Zoom & Pan on Detail Image =====
 function setupDetailZoom() {
   const wrapper = document.getElementById('detail-image-wrapper');
@@ -3588,11 +3654,17 @@ function setupDetailZoom() {
     wrapper.classList.toggle('panning', isPanning);
   }
 
-  // Recompute base size when image loads
+  // Refit the image when a selection loads or the detail panel changes width.
   img.addEventListener('load', () => {
     computeBase();
     resetView();
   });
+  new ResizeObserver(() => {
+    if (img.naturalWidth && wrapper.clientWidth && wrapper.clientHeight) {
+      computeBase();
+      resetView();
+    }
+  }).observe(wrapper);
 
   // Click to zoom centered on click point (or zoom out)
   wrapper.addEventListener('click', (e) => {
@@ -4416,6 +4488,7 @@ async function init() {
   });
 
   setupTagAutocomplete();
+  setupDetailResize();
   setupDetailZoom();
   setupBgModeBar('detail-bg-bar', 'detail-image-wrapper', 'detail-bg-color', 'detailBgMode');
   setupCarousel();
