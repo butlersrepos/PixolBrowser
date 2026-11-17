@@ -58,6 +58,7 @@ let cachedVisibleImages = null; // images after excludes, before tag/search filt
 let lowercaseIndex = null; // Map<imagePath, lowercasedPath> for fast search
 let lowercaseBasenameIndex = null; // Map<imagePath, lowercased file name>
 const cachedImageTags = new Map();
+const cachedLowercaseImageTags = new Map();
 let cachedAutoTagRules = null;
 let cachedTagSummary = null;
 let renderedTagSummary = null;
@@ -263,9 +264,13 @@ function invalidateVisibleCache() {
 
 function invalidateTagCache(imagePaths) {
   if (imagePaths) {
-    for (const path of imagePaths) cachedImageTags.delete(path);
+    for (const path of imagePaths) {
+      cachedImageTags.delete(path);
+      cachedLowercaseImageTags.delete(path);
+    }
   } else {
     cachedImageTags.clear();
+    cachedLowercaseImageTags.clear();
     cachedAutoTagRules = null;
   }
   cachedTagSummary = null;
@@ -808,18 +813,26 @@ const SEARCH_FILTER_BY_ALIAS = new Map(SEARCH_FILTERS.flatMap(filter => [
 ]));
 
 function parseSearchQuery(raw) {
-  const result = { text: '', textTerms: [], names: [], tags: [], dims: null, fileTypes: [], dateFilter: null };
+  const result = {
+    text: '', textTerms: [], excludedTextTerms: [],
+    names: [], excludedNames: [], tags: [], excludedTags: [],
+    dims: null, fileTypes: [], excludedFileTypes: [], dateFilter: null,
+  };
   const parts = raw.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
   const textParts = [];
-  for (const part of parts) {
+  for (const rawPart of parts) {
+    if (rawPart === '-') continue;
+    const excluded = rawPart.startsWith('-');
+    const part = excluded ? rawPart.slice(1) : rawPart;
     const colon = part.indexOf(':');
     const filter = colon > 0 ? SEARCH_FILTER_BY_ALIAS.get(part.slice(0, colon).toLowerCase()) : null;
     const val = filter ? part.slice(colon + 1).replace(/^"|"$/g, '') : '';
     if (filter?.key === 'names') {
-      if (val) result.names.push(val.toLowerCase());
+      if (val) (excluded ? result.excludedNames : result.names).push(val.toLowerCase());
     } else if (filter?.key === 'tags') {
-      if (val) result.tags.push(val.toLowerCase());
+      if (val) (excluded ? result.excludedTags : result.tags).push(val.toLowerCase());
     } else if (filter?.key === 'dims') {
+      if (excluded) continue;
       const size = val.toLowerCase();
       if (DIM_PRESETS[size]) {
         result.dims = DIM_PRESETS[size];
@@ -831,8 +844,9 @@ function parseSearchQuery(raw) {
       }
     } else if (filter?.key === 'fileTypes') {
       const type = val.toLowerCase().replace(/^\./, '');
-      if (type) result.fileTypes.push('.' + type);
+      if (type) (excluded ? result.excludedFileTypes : result.fileTypes).push('.' + type);
     } else if (filter?.key === 'dateFilter') {
+      if (excluded) continue;
       const date = val.toLowerCase();
       if (date === 'recent' || date === 'today') {
         result.dateFilter = Date.now() - 24 * 60 * 60 * 1000;
@@ -845,8 +859,13 @@ function parseSearchQuery(raw) {
         if (!isNaN(ts)) result.dateFilter = ts;
       }
     } else {
-      textParts.push(part);
-      result.textTerms.push(part.replace(/^"|"$/g, '').toLowerCase());
+      const term = part.replace(/^"|"$/g, '').toLowerCase();
+      if (!term) continue;
+      if (excluded) result.excludedTextTerms.push(term);
+      else {
+        textParts.push(part);
+        result.textTerms.push(term);
+      }
     }
   }
   result.text = textParts.join(' ').trim();
@@ -859,6 +878,10 @@ function showSearchHelp() {
   const helpRows = [
     { long: 'Words', short: '—', example: 'back card', description: 'All, any order' },
     { long: '"phrase"', short: '—', example: '"back card"', description: 'Exact path phrase' },
+    {
+      long: 'Exclude', short: '-', example: 'chest -mimic',
+      description: `Words · phrases · ${SEARCH_FILTERS.filter(filter => ['names', 'tags', 'fileTypes'].includes(filter.key)).map(filter => `${filter.short}:`).join(' · ')}`,
+    },
     ...SEARCH_FILTERS.map(filter => ({
       ...filter,
       description: filter.key === 'dims'
@@ -870,7 +893,7 @@ function showSearchHelp() {
   ];
   for (const row of helpRows) {
     const tr = document.createElement('tr');
-    const isFilter = row.short !== '—';
+    const isFilter = Boolean(row.key);
     for (const value of [isFilter ? `${row.long}:` : row.long, isFilter ? `${row.short}:` : row.short]) {
       const cell = document.createElement('td');
       cell.textContent = value;
@@ -909,33 +932,37 @@ function applyFilters() {
   const parsed = state.searchQuery ? parseSearchQuery(state.searchQuery) : null;
 
   // Search text filter (path matching)
-  if (parsed?.textTerms.length) {
+  if (parsed && (parsed.textTerms.length || parsed.excludedTextTerms.length)) {
     images = images.filter(img => {
       const path = lowercaseIndex?.get(img) || img.toLowerCase();
-      return parsed.textTerms.every(term => path.includes(term));
+      return parsed.textTerms.every(term => path.includes(term)) &&
+        parsed.excludedTextTerms.every(term => !path.includes(term));
     });
   }
 
-  if (parsed?.names.length) {
+  if (parsed && (parsed.names.length || parsed.excludedNames.length)) {
     images = images.filter(img => {
       const name = lowercaseBasenameIndex?.get(img) ?? basename(img).toLowerCase();
-      return parsed.names.every(term => name.includes(term));
+      return parsed.names.every(term => name.includes(term)) &&
+        parsed.excludedNames.every(term => !name.includes(term));
     });
   }
 
   // Tag prefix filter (t:)
-  if (parsed?.tags.length) {
+  if (parsed && (parsed.tags.length || parsed.excludedTags.length)) {
     images = images.filter(img => {
-      const imgTags = getTagsForImage(img).map(t => t.toLowerCase());
-      return parsed.tags.every(t => imgTags.some(it => it.includes(t)));
+      const imgTags = getLowercaseTagsForImage(img);
+      return parsed.tags.every(t => imgTags.some(it => it.includes(t))) &&
+        parsed.excludedTags.every(t => !imgTags.some(it => it.includes(t)));
     });
   }
 
   // File type prefix filter (f:)
-  if (parsed?.fileTypes.length) {
+  if (parsed && (parsed.fileTypes.length || parsed.excludedFileTypes.length)) {
     images = images.filter(img => {
-      const lower = img.toLowerCase();
-      return parsed.fileTypes.some(ext => lower.endsWith(ext));
+      const lower = lowercaseIndex?.get(img) || img.toLowerCase();
+      return (!parsed.fileTypes.length || parsed.fileTypes.some(ext => lower.endsWith(ext))) &&
+        parsed.excludedFileTypes.every(ext => !lower.endsWith(ext));
     });
   }
 
@@ -1016,7 +1043,13 @@ function getTagsForImage(img) {
   }
   const result = [...tags];
   cachedImageTags.set(img, result);
+  cachedLowercaseImageTags.set(img, result.map(tag => tag.toLowerCase()));
   return result;
+}
+
+function getLowercaseTagsForImage(img) {
+  getTagsForImage(img);
+  return cachedLowercaseImageTags.get(img);
 }
 
 function getTagSummary() {
