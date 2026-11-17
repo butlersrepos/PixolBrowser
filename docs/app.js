@@ -870,7 +870,8 @@ function showSearchHelp() {
   ];
   for (const row of helpRows) {
     const tr = document.createElement('tr');
-    for (const value of [row.long, row.short]) {
+    const isFilter = row.short !== '—';
+    for (const value of [isFilter ? `${row.long}:` : row.long, isFilter ? `${row.short}:` : row.short]) {
       const cell = document.createElement('td');
       cell.textContent = value;
       tr.appendChild(cell);
