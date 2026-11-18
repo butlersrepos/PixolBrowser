@@ -72,6 +72,9 @@ html, body {
 
 .open-path-text.has-path { color: var(--text); font-family: monospace; }
 
+/* RTL on the outer label keeps the filename visible; isolate its LTR text. */
+.truncated-path-text { direction: ltr; unicode-bidi: isolate; }
+
 .open-checkbox-row {
   display: flex;
   align-items: center;

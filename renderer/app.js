@@ -1057,6 +1057,15 @@ function relativePath(img) {
   return img.startsWith(prefix) ? img.slice(prefix.length) : img;
 }
 
+// Keep path punctuation in LTR order inside labels that truncate from the left.
+function setTruncatedPath(element, path) {
+  const text = document.createElement('span');
+  text.dir = 'ltr';
+  text.className = 'truncated-path-text';
+  text.textContent = path;
+  element.replaceChildren(text);
+}
+
 function compareImagePaths(a, b) {
   return relativePath(a).localeCompare(relativePath(b), undefined, { sensitivity: 'base', numeric: true });
 }
@@ -1667,7 +1676,7 @@ function buildMatchPreview(container, inputEl) {
     const display = matches.slice(0, 200);
     fileListEl.innerHTML = display.map(f => {
       const rel = relativePath(f);
-      return `<div class="rule-file-item" title="${escAttr(rel)}">${escHtml(rel)}</div>`;
+      return `<div class="rule-file-item" title="${escAttr(rel)}"><span class="truncated-path-text" dir="ltr">${escHtml(rel)}</span></div>`;
     }).join('')
       + (matches.length > 200 ? `<div class="rule-file-item muted">...and ${(matches.length - 200).toLocaleString()} more</div>` : '');
   }
@@ -2191,7 +2200,7 @@ function renderQuickOpenResults(query) {
     nameEl.textContent = basename(imgPath);
     const pathEl = document.createElement('span');
     pathEl.className = 'quick-open-path';
-    pathEl.textContent = relativePath(imgPath);
+    setTruncatedPath(pathEl, relativePath(imgPath));
     item.appendChild(thumb);
     item.appendChild(nameEl);
     item.appendChild(pathEl);
@@ -3742,7 +3751,7 @@ function renderCell(cell, imagePath, index) {
   if (state.viewMode === 'list') {
     const pathEl = document.createElement('span');
     pathEl.className = 'list-path';
-    pathEl.textContent = relativePath(imagePath);
+    setTruncatedPath(pathEl, relativePath(imagePath));
     cell.title = relativePath(imagePath);
     cell.appendChild(pathEl);
     const dimensions = state.dimensions[imagePath];
@@ -3778,7 +3787,7 @@ function renderCell(cell, imagePath, index) {
 
   const nameEl = document.createElement('div');
   nameEl.className = 'cell-filename';
-  nameEl.textContent = relativePath(imagePath);
+  setTruncatedPath(nameEl, relativePath(imagePath));
   nameEl.title = relativePath(imagePath);
   cell.appendChild(nameEl);
 
@@ -5050,7 +5059,7 @@ function showOpenModal() {
   // Pre-fill with last directory if available
   if (state.metadata.lastDirectory) {
     openModalState.path = state.metadata.lastDirectory;
-    document.getElementById('open-path-display').textContent = state.metadata.lastDirectory;
+    setTruncatedPath(document.getElementById('open-path-display'), state.metadata.lastDirectory);
     document.getElementById('open-path-display').classList.add('has-path');
     document.getElementById('open-recursive').checked = state.metadata.lastRecursive !== false;
     document.getElementById('open-confirm-btn').disabled = false;
@@ -5078,11 +5087,11 @@ function renderRecentDirs() {
   for (const dir of dirs) {
     const item = document.createElement('div');
     item.className = 'recent-dir-item';
-    item.textContent = dir;
+    setTruncatedPath(item, dir);
     item.title = dir;
     item.addEventListener('click', () => {
       openModalState.path = dir;
-      document.getElementById('open-path-display').textContent = dir;
+      setTruncatedPath(document.getElementById('open-path-display'), dir);
       document.getElementById('open-path-display').classList.add('has-path');
       document.getElementById('open-confirm-btn').disabled = false;
       runOpenCount();
@@ -5127,7 +5136,7 @@ function setupOpenModal() {
     const dirPath = await window.api.openDirectory();
     if (!dirPath) return;
     openModalState.path = dirPath;
-    document.getElementById('open-path-display').textContent = dirPath;
+    setTruncatedPath(document.getElementById('open-path-display'), dirPath);
     document.getElementById('open-path-display').classList.add('has-path');
     document.getElementById('open-confirm-btn').disabled = false;
     runOpenCount();
