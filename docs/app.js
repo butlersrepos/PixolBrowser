@@ -5,7 +5,8 @@ const state = {
   allImages: [],       // All PNG paths found
   filteredImages: [],  // After filters/exclusions
   metadata: null,      // Persisted metadata
-  currentFilter: 'all',
+  activeTags: new Set(),
+  untaggedFilter: false,
   searchQuery: '',
   selectedImages: new Set(),
   lastClickedIndex: -1,  // for shift+click range select
@@ -13,8 +14,9 @@ const state = {
   zoomLevel: 1,
   dimensions: {},      // path -> { width, height, fileSize, modified }
   dimFilter: null,     // null = no filter, or { min, max } on max(w,h)
-  sortBy: 'name',      // 'name', 'size', 'dimensions', 'modified'
+  sortBy: 'name',      // 'name', 'path', 'size', 'dimensions', 'modified'
   sortDir: 'asc',      // 'asc' or 'desc'
+  viewMode: 'grid',
   capturedRegions: [], // { imageData, width, height, sourceName, id }
 };
 
@@ -56,7 +58,9 @@ function migrateMetadata(m) {
 }
 let cachedVisibleImages = null; // images after excludes, before tag/search filters
 let lowercaseIndex = null; // Map<imagePath, lowercasedPath> for fast search
+let lowercaseBasenameIndex = null; // Map<imagePath, lowercased file name>
 const cachedImageTags = new Map();
+const cachedLowercaseImageTags = new Map();
 let cachedAutoTagRules = null;
 let cachedTagSummary = null;
 let renderedTagSummary = null;
@@ -89,6 +93,7 @@ class VirtualGrid {
     this.gap = options.gap || 8;
     this.padding = options.padding || 8;
     this.bufferRows = options.bufferRows || 4;
+    this.mode = options.mode || 'grid';
     this.items = [];
     this.onCellRender = options.onCellRender || (() => {});
     this.onCellClick = options.onCellClick || (() => {});
@@ -142,7 +147,7 @@ class VirtualGrid {
     const el = this.renderedCells.get(index);
     if (el) {
       const newEl = el.cloneNode(false);
-      newEl.className = 'grid-cell';
+      newEl.className = 'grid-cell' + (this.mode === 'list' ? ' list-row' : '');
       newEl.style.cssText = el.style.cssText;
       this.onCellRender(newEl, this.items[index], index);
       newEl.addEventListener('click', (e) => this.onCellClick(this.items[index], index, e));
@@ -157,7 +162,7 @@ class VirtualGrid {
     const height = this.scrollEl.clientHeight;
     const scrollTop = this.scrollEl.scrollTop;
 
-    const cols = Math.max(1, Math.floor((width + this.gap) / (this.cellWidth + this.gap)));
+    const cols = this.mode === 'list' ? 1 : Math.max(1, Math.floor((width + this.gap) / (this.cellWidth + this.gap)));
     const rows = Math.ceil(this.items.length / cols);
     const rowHeight = this.cellHeight + this.gap;
     const totalHeight = rows * rowHeight + this.padding * 2;
@@ -198,20 +203,21 @@ class VirtualGrid {
         if (idx >= this.items.length) break;
         if (this.renderedCells.has(idx)) {
           // Reposition if columns changed
-          if (cols !== this.prevCols) {
+          if (cols !== this.prevCols || this.mode === 'list') {
             const el = this.renderedCells.get(idx);
             el.style.left = (leftOffset + c * (this.cellWidth + this.gap)) + 'px';
             el.style.top = (topOffset + r * rowHeight) + 'px';
+            el.style.width = (this.mode === 'list' ? Math.max(0, width) : this.cellWidth) + 'px';
           }
           continue;
         }
 
         const cell = document.createElement('div');
-        cell.className = 'grid-cell';
+        cell.className = 'grid-cell' + (this.mode === 'list' ? ' list-row' : '');
         cell.style.position = 'absolute';
         cell.style.left = (leftOffset + c * (this.cellWidth + this.gap)) + 'px';
         cell.style.top = (topOffset + r * rowHeight) + 'px';
-        cell.style.width = this.cellWidth + 'px';
+        cell.style.width = (this.mode === 'list' ? Math.max(0, width) : this.cellWidth) + 'px';
         cell.style.height = this.cellHeight + 'px';
 
         this.onCellRender(cell, this.items[idx], idx);
@@ -231,6 +237,15 @@ class VirtualGrid {
 
   scrollToTop() {
     this.scrollEl.scrollTop = 0;
+  }
+
+  setMode(mode) {
+    if (this.mode === mode) return;
+    this.mode = mode;
+    this.cellHeight = mode === 'list' ? 40 : 160;
+    this.gap = mode === 'list' ? 2 : 8;
+    this.container.classList.toggle('list-mode', mode === 'list');
+    this.setItems(this.items);
   }
 
   scrollToIndex(index) {
@@ -262,9 +277,13 @@ function invalidateVisibleCache() {
 
 function invalidateTagCache(imagePaths) {
   if (imagePaths) {
-    for (const path of imagePaths) cachedImageTags.delete(path);
+    for (const path of imagePaths) {
+      cachedImageTags.delete(path);
+      cachedLowercaseImageTags.delete(path);
+    }
   } else {
     cachedImageTags.clear();
+    cachedLowercaseImageTags.clear();
     cachedAutoTagRules = null;
   }
   cachedTagSummary = null;
@@ -656,7 +675,8 @@ function saveCurrentView() {
   const view = {
     name: name.trim(),
     searchQuery: state.searchQuery || '',
-    currentFilter: state.currentFilter || 'all',
+    activeTags: [...state.activeTags],
+    untaggedFilter: state.untaggedFilter,
     dimFilter: state.dimFilter ? { ...state.dimFilter } : null,
     sortBy: state.sortBy,
     sortDir: state.sortDir,
@@ -671,7 +691,15 @@ function saveCurrentView() {
 function restoreSavedView(view) {
   cancelPendingSearch();
   state.searchQuery = view.searchQuery || '';
-  state.currentFilter = view.currentFilter || 'all';
+  // Older saved views stored one tag (or Untagged) in currentFilter.
+  state.activeTags = new Set(Array.isArray(view.activeTags)
+    ? view.activeTags
+    : view.currentFilter && !['all', 'untagged'].includes(view.currentFilter)
+      ? [view.currentFilter] : []);
+  state.untaggedFilter = Array.isArray(view.activeTags)
+    ? Boolean(view.untaggedFilter)
+    : view.currentFilter === 'untagged';
+  if (state.untaggedFilter) state.activeTags.clear();
   state.dimFilter = view.dimFilter || null;
   state.sortBy = view.sortBy || 'name';
   state.sortDir = view.sortDir || 'asc';
@@ -683,10 +711,11 @@ function restoreSavedView(view) {
   updateDimFilterUI();
 
   // Update sort UI
-  const sortSelect = document.getElementById('sort-select');
-  const sortDirBtn = document.getElementById('sort-dir-btn');
+  const sortSelect = document.getElementById('sort-by');
+  const sortDirBtn = document.getElementById('sort-dir');
   if (sortSelect) sortSelect.value = state.sortBy;
   if (sortDirBtn) sortDirBtn.textContent = state.sortDir === 'asc' ? '\u25B2' : '\u25BC';
+  updatePathHeader();
 
   updateGrid();
   renderSavedSearches();
@@ -729,8 +758,11 @@ function renderSavedSearches() {
 
 function buildSavedSearchTooltip(s) {
   const parts = [];
-  if (s.searchQuery) parts.push(`Search: ${s.searchQuery}`);
-  if (s.currentFilter && s.currentFilter !== 'all') parts.push(`Tag: ${s.currentFilter}`);
+  if (s.searchQuery) parts.push(`Search: ${relativePath(s.searchQuery)}`);
+  const tags = Array.isArray(s.activeTags) ? s.activeTags
+    : s.currentFilter && !['all', 'untagged'].includes(s.currentFilter) ? [s.currentFilter] : [];
+  if (tags.length) parts.push(`Tags: ${tags.join(', ')}`);
+  if (s.untaggedFilter || s.currentFilter === 'untagged') parts.push('Untagged');
   if (s.dimFilter) parts.push(`Size: ${s.dimFilter.min}-${s.dimFilter.max}`);
   if (s.sortBy !== 'name') parts.push(`Sort: ${s.sortBy}`);
   return parts.join(' | ') || 'All images';
@@ -784,7 +816,7 @@ function hideSearchHistory() {
 }
 
 // ===== Omni Search Parser =====
-// Parse search query for prefix modifiers: t:tag, s:size, d:date, f:format
+// Long and short prefixes share this table with the search help window.
 const DIM_PRESETS = {
   tiny: { min: 0, max: 32 },
   small: { min: 33, max: 64 },
@@ -795,80 +827,171 @@ const DIM_PRESETS = {
   xl: { min: 257, max: Infinity },
 };
 
+const SEARCH_FILTERS = [
+  { key: 'names', long: 'name', short: 'n', example: 'name:card', description: 'File name only' },
+  { key: 'tags', long: 'tag', short: 't', example: 'tag:hero', description: 'Image tags' },
+  { key: 'dims', long: 'size', short: 's', example: 'size:small', description: 'Width or height' },
+  { key: 'dateFilter', long: 'date', short: 'd', example: 'date:week', description: 'Date modified' },
+  { key: 'fileTypes', long: 'type', short: 'f', example: 'type:png', description: 'File extension' },
+];
+const SEARCH_FILTER_BY_ALIAS = new Map(SEARCH_FILTERS.flatMap(filter => [
+  [filter.long, filter], [filter.short, filter],
+]));
+
 function parseSearchQuery(raw) {
-  const result = { text: '', tags: [], dims: null, fileTypes: [], dateFilter: null };
+  const result = {
+    text: '', textTerms: [], excludedTextTerms: [],
+    names: [], excludedNames: [], tags: [], excludedTags: [],
+    dims: null, fileTypes: [], excludedFileTypes: [], dateFilter: null,
+  };
   const parts = raw.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
   const textParts = [];
-  for (const part of parts) {
-    const lower = part.toLowerCase();
-    if (lower.startsWith('t:')) {
-      const val = part.slice(2).replace(/^"|"$/g, '');
-      if (val) result.tags.push(val.toLowerCase());
-    } else if (lower.startsWith('s:')) {
-      const val = part.slice(2).toLowerCase();
-      if (DIM_PRESETS[val]) {
-        result.dims = DIM_PRESETS[val];
+  for (const rawPart of parts) {
+    if (rawPart === '-') continue;
+    const excluded = rawPart.startsWith('-');
+    const part = excluded ? rawPart.slice(1) : rawPart;
+    const colon = part.indexOf(':');
+    const filter = colon > 0 ? SEARCH_FILTER_BY_ALIAS.get(part.slice(0, colon).toLowerCase()) : null;
+    const val = filter ? part.slice(colon + 1).replace(/^"|"$/g, '') : '';
+    if (filter?.key === 'names') {
+      if (val) (excluded ? result.excludedNames : result.names).push(val.toLowerCase());
+    } else if (filter?.key === 'tags') {
+      if (val) (excluded ? result.excludedTags : result.tags).push(val.toLowerCase());
+    } else if (filter?.key === 'dims') {
+      if (excluded) continue;
+      const size = val.toLowerCase();
+      if (DIM_PRESETS[size]) {
+        result.dims = DIM_PRESETS[size];
       } else {
-        const rangeMatch = val.match(/^(\d+)\s*-\s*(\d+)$/);
+        const rangeMatch = size.match(/^(\d+)\s*-\s*(\d+)$/);
         if (rangeMatch) {
           result.dims = { min: parseInt(rangeMatch[1]), max: parseInt(rangeMatch[2]) };
         }
       }
-    } else if (lower.startsWith('f:')) {
-      const val = part.slice(2).toLowerCase().replace(/^\./, '');
-      if (val) result.fileTypes.push('.' + val);
-    } else if (lower.startsWith('d:')) {
-      const val = part.slice(2).toLowerCase();
-      if (val === 'recent' || val === 'today') {
+    } else if (filter?.key === 'fileTypes') {
+      const type = val.toLowerCase().replace(/^\./, '');
+      if (type) (excluded ? result.excludedFileTypes : result.fileTypes).push('.' + type);
+    } else if (filter?.key === 'dateFilter') {
+      if (excluded) continue;
+      const date = val.toLowerCase();
+      if (date === 'recent' || date === 'today') {
         result.dateFilter = Date.now() - 24 * 60 * 60 * 1000;
-      } else if (val === 'week') {
+      } else if (date === 'week') {
         result.dateFilter = Date.now() - 7 * 24 * 60 * 60 * 1000;
-      } else if (val === 'month') {
+      } else if (date === 'month') {
         result.dateFilter = Date.now() - 30 * 24 * 60 * 60 * 1000;
-      } else if (val.startsWith('>')) {
-        const ts = Date.parse(val.slice(1));
+      } else if (date.startsWith('>')) {
+        const ts = Date.parse(date.slice(1));
         if (!isNaN(ts)) result.dateFilter = ts;
       }
     } else {
-      textParts.push(part);
+      const term = part.replace(/^"|"$/g, '').toLowerCase();
+      if (!term) continue;
+      if (excluded) result.excludedTextTerms.push(term);
+      else {
+        textParts.push(part);
+        result.textTerms.push(term);
+      }
     }
   }
   result.text = textParts.join(' ').trim();
   return result;
 }
 
+function showSearchHelp() {
+  const rows = document.getElementById('search-help-rows');
+  rows.replaceChildren();
+  const helpRows = [
+    { long: 'Words', short: '—', example: 'back card', description: 'All, any order' },
+    { long: '"phrase"', short: '—', example: '"back card"', description: 'Exact path phrase' },
+    {
+      long: 'Exclude', short: '-', example: 'chest -mimic',
+      description: `Words · phrases · ${SEARCH_FILTERS.filter(filter => ['names', 'tags', 'fileTypes'].includes(filter.key)).map(filter => `${filter.short}:`).join(' · ')}`,
+    },
+    ...SEARCH_FILTERS.map(filter => ({
+      ...filter,
+      description: filter.key === 'dims'
+        ? `${Object.keys(DIM_PRESETS).join(' · ')} · 32-64`
+        : filter.key === 'dateFilter'
+          ? 'today · week · month · >YYYY-MM-DD'
+          : filter.description,
+    })),
+  ];
+  for (const row of helpRows) {
+    const tr = document.createElement('tr');
+    const isFilter = Boolean(row.key);
+    for (const value of [isFilter ? `${row.long}:` : row.long, isFilter ? `${row.short}:` : row.short]) {
+      const cell = document.createElement('td');
+      cell.textContent = value;
+      tr.appendChild(cell);
+    }
+    const exampleCell = document.createElement('td');
+    const example = document.createElement('button');
+    example.className = 'search-help-example';
+    example.textContent = row.example;
+    example.dataset.query = row.example;
+    exampleCell.appendChild(example);
+    tr.appendChild(exampleCell);
+    const description = document.createElement('td');
+    description.textContent = row.description;
+    tr.appendChild(description);
+    rows.appendChild(tr);
+  }
+  document.getElementById('search-help-modal').classList.remove('hidden');
+}
+
+function hideSearchHelp() {
+  document.getElementById('search-help-modal').classList.add('hidden');
+}
+
 function applyFilters() {
   let images = getVisibleImages();
 
   // Tag filter (sidebar)
-  if (state.currentFilter === 'untagged') {
+  if (state.untaggedFilter) {
     images = images.filter(img => !getTagsForImage(img).length);
-  } else if (state.currentFilter !== 'all') {
-    images = images.filter(img => getTagsForImage(img).includes(state.currentFilter));
+  } else if (state.activeTags.size) {
+    images = images.filter(img => {
+      const tags = getTagsForImage(img);
+      return [...state.activeTags].every(tag => tags.includes(tag));
+    });
   }
 
   // Parse omni search
   const parsed = state.searchQuery ? parseSearchQuery(state.searchQuery) : null;
 
   // Search text filter (path matching)
-  if (parsed?.text) {
-    const q = parsed.text.toLowerCase();
-    images = images.filter(img => (lowercaseIndex?.get(img) || img.toLowerCase()).includes(q));
+  if (parsed && (parsed.textTerms.length || parsed.excludedTextTerms.length)) {
+    images = images.filter(img => {
+      const path = lowercaseIndex?.get(img) || img.toLowerCase();
+      return parsed.textTerms.every(term => path.includes(term)) &&
+        parsed.excludedTextTerms.every(term => !path.includes(term));
+    });
+  }
+
+  if (parsed && (parsed.names.length || parsed.excludedNames.length)) {
+    images = images.filter(img => {
+      const name = lowercaseBasenameIndex?.get(img) ?? basename(img).toLowerCase();
+      return parsed.names.every(term => name.includes(term)) &&
+        parsed.excludedNames.every(term => !name.includes(term));
+    });
   }
 
   // Tag prefix filter (t:)
-  if (parsed?.tags.length) {
+  if (parsed && (parsed.tags.length || parsed.excludedTags.length)) {
     images = images.filter(img => {
-      const imgTags = getTagsForImage(img).map(t => t.toLowerCase());
-      return parsed.tags.every(t => imgTags.some(it => it.includes(t)));
+      const imgTags = getLowercaseTagsForImage(img);
+      return parsed.tags.every(t => imgTags.some(it => it.includes(t))) &&
+        parsed.excludedTags.every(t => !imgTags.some(it => it.includes(t)));
     });
   }
 
   // File type prefix filter (f:)
-  if (parsed?.fileTypes.length) {
+  if (parsed && (parsed.fileTypes.length || parsed.excludedFileTypes.length)) {
     images = images.filter(img => {
-      const lower = img.toLowerCase();
-      return parsed.fileTypes.some(ext => lower.endsWith(ext));
+      const lower = lowercaseIndex?.get(img) || img.toLowerCase();
+      return (!parsed.fileTypes.length || parsed.fileTypes.some(ext => lower.endsWith(ext))) &&
+        parsed.excludedFileTypes.every(ext => !lower.endsWith(ext));
     });
   }
 
@@ -901,6 +1024,8 @@ function applyFilters() {
       switch (state.sortBy) {
         case 'name':
           return dir * a.localeCompare(b);
+        case 'path':
+          return dir * compareImagePaths(a, b);
         case 'size': {
           const sa = dims[a]?.fileSize || 0;
           const sb = dims[b]?.fileSize || 0;
@@ -926,10 +1051,23 @@ function applyFilters() {
 }
 
 function relativePath(img) {
-  if (state.baseDirectory && img.startsWith(state.baseDirectory)) {
-    return img.slice(state.baseDirectory.length + 1);
-  }
-  return img;
+  if (!state.baseDirectory) return img;
+  const base = state.baseDirectory.replace(/\/+$/, '') || '/';
+  const prefix = base === '/' ? '/' : base + '/';
+  return img.startsWith(prefix) ? img.slice(prefix.length) : img;
+}
+
+// Keep path punctuation in LTR order inside labels that truncate from the left.
+function setTruncatedPath(element, path) {
+  const text = document.createElement('span');
+  text.dir = 'ltr';
+  text.className = 'truncated-path-text';
+  text.textContent = path;
+  element.replaceChildren(text);
+}
+
+function compareImagePaths(a, b) {
+  return relativePath(a).localeCompare(relativePath(b), undefined, { sensitivity: 'base', numeric: true });
 }
 
 function getTagsForImage(img) {
@@ -949,7 +1087,13 @@ function getTagsForImage(img) {
   }
   const result = [...tags];
   cachedImageTags.set(img, result);
+  cachedLowercaseImageTags.set(img, result.map(tag => tag.toLowerCase()));
   return result;
+}
+
+function getLowercaseTagsForImage(img) {
+  getTagsForImage(img);
+  return cachedLowercaseImageTags.get(img);
 }
 
 function getTagSummary() {
@@ -1004,6 +1148,7 @@ function updateGrid() {
     grid.setItems(state.filteredImages);
   }
   updateSidebar();
+  activateFilter();
   updateStatus();
 }
 
@@ -1022,7 +1167,7 @@ function updateSidebar() {
   const sorted = [...state.allTags.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   for (const [tag, count] of sorted) {
     const item = document.createElement('div');
-    item.className = 'tag-item' + (state.currentFilter === tag ? ' active' : '');
+    item.className = 'tag-item' + (state.activeTags.has(tag) ? ' active' : '');
     item.dataset.filter = tag;
     item.innerHTML = `
       <span class="tag-color-dot" style="background: ${tagColor(tag)}"></span>
@@ -1030,7 +1175,7 @@ function updateSidebar() {
       <span class="tag-count">${count}</span>
     `;
     item.addEventListener('click', () => {
-      state.currentFilter = tag;
+      toggleTagFilter(tag);
       activateFilter();
       updateGrid();
     });
@@ -1075,7 +1220,7 @@ function showTagContextMenu(e, tag, count) {
       activeConfig().autoTagRules = activeConfig().autoTagRules.filter(r => r.tags.length > 0);
       invalidateTagCache();
       scheduleSave();
-      if (state.currentFilter === tag) state.currentFilter = 'all';
+      state.activeTags.delete(tag);
       updateGrid();
       updateDetailTags();
     }
@@ -1090,8 +1235,71 @@ function showTagContextMenu(e, tag, count) {
 
 function activateFilter() {
   document.querySelectorAll('.tag-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.filter === state.currentFilter);
+    const filter = el.dataset.filter;
+    el.classList.toggle('active', filter === 'all'
+      ? !state.untaggedFilter && state.activeTags.size === 0
+      : filter === 'untagged' ? state.untaggedFilter : state.activeTags.has(filter));
   });
+  renderActiveTagFilters();
+}
+
+function toggleTagFilter(tag) {
+  state.untaggedFilter = false;
+  if (state.activeTags.has(tag)) state.activeTags.delete(tag);
+  else state.activeTags.add(tag);
+}
+
+function selectSidebarFilter(filter) {
+  if (filter === 'all') {
+    state.activeTags.clear();
+    state.untaggedFilter = false;
+  } else if (filter === 'untagged') {
+    state.activeTags.clear();
+    state.untaggedFilter = !state.untaggedFilter;
+  }
+}
+
+function renderActiveTagFilters() {
+  const bar = document.getElementById('active-tag-filters');
+  if (!bar) return;
+  bar.replaceChildren();
+  bar.classList.toggle('hidden', !state.activeTags.size && !state.untaggedFilter);
+  const filters = state.untaggedFilter ? ['untagged'] : [...state.activeTags];
+  for (const tag of filters) {
+    const chip = document.createElement('span');
+    chip.className = 'active-tag-chip';
+    chip.style.background = tag === 'untagged' ? 'var(--card)' : tagBg(tag);
+    chip.style.color = tag === 'untagged' ? 'var(--text)' : tagColor(tag);
+    const name = document.createElement('button');
+    name.className = 'active-tag-name';
+    name.textContent = tag === 'untagged' ? 'Untagged' : tag;
+    name.title = tag === 'untagged' ? 'Show Untagged in the sidebar' : `Show ${tag} in the sidebar`;
+    name.addEventListener('click', () => {
+      const item = [...document.querySelectorAll('.tag-item')].find(el => el.dataset.filter === tag);
+      item?.scrollIntoView({ block: 'nearest' });
+    });
+    const remove = document.createElement('button');
+    remove.className = 'active-tag-remove';
+    remove.textContent = '×';
+    remove.setAttribute('aria-label', `Remove ${name.textContent} filter`);
+    remove.addEventListener('click', () => {
+      if (tag === 'untagged') state.untaggedFilter = false;
+      else state.activeTags.delete(tag);
+      updateGrid();
+    });
+    chip.append(name, remove);
+    bar.appendChild(chip);
+  }
+  if (filters.length) {
+    const clear = document.createElement('button');
+    clear.className = 'active-tags-clear';
+    clear.textContent = 'Clear all';
+    clear.addEventListener('click', () => {
+      selectSidebarFilter('all');
+      updateGrid();
+    });
+    bar.appendChild(clear);
+  }
 }
 
 function updateStatus() {
@@ -1154,6 +1362,33 @@ function syncSelectionClasses() {
   }
 }
 
+// Desktop-only external editor controls.
+let externalEditorRequest = 0;
+async function refreshExternalEditor() {
+  if (!window.api.getExternalEditor) return;
+  const request = ++externalEditorRequest;
+  try {
+    const editor = await window.api.getExternalEditor(state.metadata?.externalEditor || null);
+    if (request !== externalEditorRequest) return;
+    const button = document.getElementById('carousel-open-external');
+    document.getElementById('carousel-open-external-label').textContent = editor.name ? `Open in ${editor.name}` : 'Open Externally';
+    button.title = editor.path || 'Open with the system default app';
+    const choice = document.getElementById('settings-external-editor-choice');
+    choice.textContent = `${state.metadata?.externalEditor ? '' : 'Auto: '}${editor.name || 'System default'}${editor.source === 'running' && editor.path.includes('/Steam/') ? ' (Steam)' : ''}`;
+    choice.title = editor.path || 'System default app';
+  } catch (error) {
+    showExternalEditorError(error.message || 'Could not find external editor');
+  }
+}
+
+function showExternalEditorError(message) {
+  const toast = document.getElementById('external-editor-toast');
+  toast.textContent = `Could not open image: ${message}`;
+  toast.classList.remove('hidden');
+  clearTimeout(showExternalEditorError.timer);
+  showExternalEditorError.timer = setTimeout(() => toast.classList.add('hidden'), 4000);
+}
+
 // ===== Detail Panel =====
 function updateDetailPanel() {
   const content = document.getElementById('detail-content');
@@ -1199,7 +1434,7 @@ function updateDetailPanel() {
     img.src = toFileUrl(imagePath);
 
     filenameEl.textContent = basename(imagePath);
-    pathEl.textContent = relativePath(imagePath);
+    pathEl.textContent = imagePath;
     excludeBtn.textContent = 'Exclude This Image';
 
     metaEl.textContent = '';
@@ -1441,7 +1676,7 @@ function buildMatchPreview(container, inputEl) {
     const display = matches.slice(0, 200);
     fileListEl.innerHTML = display.map(f => {
       const rel = relativePath(f);
-      return `<div class="rule-file-item" title="${escAttr(rel)}">${escHtml(rel)}</div>`;
+      return `<div class="rule-file-item" title="${escAttr(rel)}"><span class="truncated-path-text" dir="ltr">${escHtml(rel)}</span></div>`;
     }).join('')
       + (matches.length > 200 ? `<div class="rule-file-item muted">...and ${(matches.length - 200).toLocaleString()} more</div>` : '');
   }
@@ -1965,7 +2200,7 @@ function renderQuickOpenResults(query) {
     nameEl.textContent = basename(imgPath);
     const pathEl = document.createElement('span');
     pathEl.className = 'quick-open-path';
-    pathEl.textContent = relativePath(imgPath);
+    setTruncatedPath(pathEl, relativePath(imgPath));
     item.appendChild(thumb);
     item.appendChild(nameEl);
     item.appendChild(pathEl);
@@ -2104,13 +2339,6 @@ function basename(p) {
   return p.split('/').pop();
 }
 
-function shortLabel(p) {
-  const parts = p.split('/');
-  // Show up to 2 parent segments for context (e.g. "Paladin/Shadows/attack.png")
-  const depth = Math.min(parts.length - 1, 2);
-  return parts.slice(parts.length - 1 - depth).join('/');
-}
-
 async function readAllDimensions(files, onProgress) {
   // Use IPC for Electron (reads file headers), Image objects for web
   if (window.api.getAllDimensions) {
@@ -2178,6 +2406,7 @@ function openCarousel(items, startIndex) {
   document.getElementById('carousel-next').style.display = multi ? '' : 'none';
   document.getElementById('carousel-counter').style.display = multi ? '' : 'none';
   loadCarouselImage();
+  refreshExternalEditor();
 }
 
 function closeCarousel() {
@@ -3376,6 +3605,21 @@ function setupCarousel() {
     }
   });
 
+  // Open the image currently shown in Inspect.
+  const externalBtn = document.getElementById('carousel-open-external');
+  externalBtn.style.display = window.api.chooseExternalEditor ? '' : 'none';
+  externalBtn.addEventListener('click', async () => {
+    if (!window.api.openInExternalEditor) return;
+    try {
+      const filePath = carousel.items[carousel.currentIndex];
+      const result = await window.api.openInExternalEditor(filePath, state.metadata?.externalEditor || null);
+      if (!result.ok) showExternalEditorError(result.error);
+      else refreshExternalEditor();
+    } catch (error) {
+      showExternalEditorError(error.message || 'Could not open image');
+    }
+  });
+
   // Carousel background mode bar
   setupBgModeBar('carousel-bg-bar', 'carousel-image-wrapper', 'carousel-bg-input', 'carouselBgMode');
 
@@ -3502,8 +3746,34 @@ function setupBgModeBar(barId, wrapperId, colorInputId, persistKey) {
 // ===== Cell Rendering =====
 function renderCell(cell, imagePath, index) {
   cell.dataset.imagePath = imagePath;
-  const tags = getTagsForImage(imagePath);
   if (state.selectedImages.has(imagePath)) cell.classList.add('selected');
+
+  if (state.viewMode === 'list') {
+    const pathEl = document.createElement('span');
+    pathEl.className = 'list-path';
+    setTruncatedPath(pathEl, relativePath(imagePath));
+    cell.title = relativePath(imagePath);
+    cell.appendChild(pathEl);
+    const dimensions = state.dimensions[imagePath];
+    if (dimensions) {
+      const info = document.createElement('span');
+      info.className = 'list-info';
+      info.textContent = `${dimensions.width} × ${dimensions.height}${dimensions.fileSize ? ' · ' + Math.max(1, Math.round(dimensions.fileSize / 1024)) + ' KB' : ''}`;
+      cell.appendChild(info);
+    }
+    const wrapper = document.createElement('div');
+    wrapper.className = 'cell-image-wrapper list-thumbnail';
+    const img = document.createElement('img');
+    img.src = toFileUrl(imagePath);
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.alt = '';
+    wrapper.appendChild(img);
+    cell.appendChild(wrapper);
+    return;
+  }
+
+  const tags = getTagsForImage(imagePath);
 
   const wrapper = document.createElement('div');
   wrapper.className = 'cell-image-wrapper';
@@ -3517,7 +3787,7 @@ function renderCell(cell, imagePath, index) {
 
   const nameEl = document.createElement('div');
   nameEl.className = 'cell-filename';
-  nameEl.textContent = shortLabel(imagePath);
+  setTruncatedPath(nameEl, relativePath(imagePath));
   nameEl.title = relativePath(imagePath);
   cell.appendChild(nameEl);
 
@@ -3533,6 +3803,72 @@ function renderCell(cell, imagePath, index) {
     }
     cell.appendChild(dots);
   }
+}
+
+// ===== Detail Panel Width =====
+const DETAIL_DEFAULT_WIDTH = 340;
+const GRID_MIN_WIDTH = 240;
+
+function setupDetailResize() {
+  const panel = document.getElementById('detail-panel');
+  const handle = document.getElementById('detail-resize-handle');
+  const main = document.getElementById('main');
+  const sidebar = document.getElementById('sidebar');
+  const savedWidth = Number(state.metadata.detailPanelWidth);
+  let preferredWidth = Number.isFinite(savedWidth) && savedWidth >= DETAIL_DEFAULT_WIDTH
+    ? savedWidth : DETAIL_DEFAULT_WIDTH;
+  let startX = 0;
+  let startWidth = 0;
+
+  function maximumWidth() {
+    return Math.max(0, main.clientWidth - sidebar.getBoundingClientRect().width - GRID_MIN_WIDTH);
+  }
+
+  function applyWidth() {
+    const maximum = maximumWidth();
+    const width = Math.min(Math.max(DETAIL_DEFAULT_WIDTH, preferredWidth), maximum);
+    panel.style.setProperty('--detail-width', `${width}px`);
+    handle.setAttribute('aria-valuemin', String(Math.min(DETAIL_DEFAULT_WIDTH, maximum)));
+    handle.setAttribute('aria-valuemax', String(maximum));
+    handle.setAttribute('aria-valuenow', String(Math.round(width)));
+  }
+
+  function saveWidth() {
+    state.metadata.detailPanelWidth = preferredWidth;
+    scheduleSave();
+  }
+
+  handle.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    handle.setPointerCapture(event.pointerId);
+    startX = event.clientX;
+    startWidth = panel.getBoundingClientRect().width;
+    panel.classList.add('resizing');
+  });
+  handle.addEventListener('pointermove', (event) => {
+    if (!handle.hasPointerCapture(event.pointerId)) return;
+    preferredWidth = Math.max(DETAIL_DEFAULT_WIDTH, Math.min(maximumWidth(), startWidth + startX - event.clientX));
+    applyWidth();
+  });
+  handle.addEventListener('pointerup', (event) => {
+    if (!handle.hasPointerCapture(event.pointerId)) return;
+    handle.releasePointerCapture(event.pointerId);
+    panel.classList.remove('resizing');
+    saveWidth();
+  });
+  handle.addEventListener('pointercancel', () => panel.classList.remove('resizing'));
+  handle.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    event.stopPropagation();
+    preferredWidth = Math.max(DETAIL_DEFAULT_WIDTH, Math.min(maximumWidth(),
+      panel.getBoundingClientRect().width + (event.key === 'ArrowLeft' ? 20 : -20)));
+    applyWidth();
+    saveWidth();
+  });
+  window.addEventListener('resize', applyWidth);
+  applyWidth();
 }
 
 // ===== Zoom & Pan on Detail Image =====
@@ -3588,11 +3924,17 @@ function setupDetailZoom() {
     wrapper.classList.toggle('panning', isPanning);
   }
 
-  // Recompute base size when image loads
+  // Refit the image when a selection loads or the detail panel changes width.
   img.addEventListener('load', () => {
     computeBase();
     resetView();
   });
+  new ResizeObserver(() => {
+    if (img.naturalWidth && wrapper.clientWidth && wrapper.clientHeight) {
+      computeBase();
+      resetView();
+    }
+  }).observe(wrapper);
 
   // Click to zoom centered on click point (or zoom out)
   wrapper.addEventListener('click', (e) => {
@@ -3985,12 +4327,28 @@ function setupSettings() {
   function renderGeneralSettings() {
     const ftInput = document.getElementById('settings-frame-time');
     ftInput.value = state.metadata?.defaultFrameTime || 200;
+    document.getElementById('settings-external-editor-group').style.display = window.api.chooseExternalEditor ? '' : 'none';
+    refreshExternalEditor();
   }
   document.getElementById('settings-frame-time').addEventListener('change', (e) => {
     const val = Math.max(16, Math.min(2000, parseInt(e.target.value) || 200));
     e.target.value = val;
     state.metadata.defaultFrameTime = val;
     scheduleSave();
+  });
+
+  document.getElementById('settings-external-editor-choose').addEventListener('click', async () => {
+    if (!window.api.chooseExternalEditor) return;
+    const chosen = await window.api.chooseExternalEditor();
+    if (!chosen) return;
+    state.metadata.externalEditor = chosen;
+    scheduleSave();
+    refreshExternalEditor();
+  });
+  document.getElementById('settings-external-editor-reset').addEventListener('click', () => {
+    delete state.metadata.externalEditor;
+    scheduleSave();
+    refreshExternalEditor();
   });
 
   // Config management
@@ -4240,13 +4598,56 @@ function setupSort() {
 
   select.addEventListener('change', () => {
     state.sortBy = select.value;
+    updatePathHeader();
     updateGrid();
   });
 
   dirBtn.addEventListener('click', () => {
     state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
     dirBtn.textContent = state.sortDir === 'asc' ? '\u25B2' : '\u25BC';
+    updatePathHeader();
     updateGrid();
+  });
+
+  document.getElementById('path-header').addEventListener('click', () => {
+    state.sortDir = state.sortBy === 'path' && state.sortDir === 'asc' ? 'desc' : 'asc';
+    state.sortBy = 'path';
+    select.value = 'path';
+    dirBtn.textContent = state.sortDir === 'asc' ? '\u25B2' : '\u25BC';
+    updatePathHeader();
+    updateGrid();
+  });
+  document.querySelectorAll('[data-view-mode]').forEach(button => button.addEventListener('click', () => {
+    const mode = button.dataset.viewMode;
+    if (state.viewMode === mode) return;
+    state.viewMode = mode;
+    state.metadata.viewMode = mode;
+    scheduleSave();
+    if (mode === 'list') {
+      state.sortBy = 'path';
+      state.sortDir = 'asc';
+      select.value = 'path';
+      dirBtn.textContent = '\u25B2';
+    }
+    grid.setMode(mode);
+    updateViewModeControls();
+    updatePathHeader();
+    updateGrid();
+  }));
+}
+
+function updatePathHeader() {
+  const header = document.getElementById('path-header');
+  if (!header) return;
+  header.textContent = `Path ${state.sortBy === 'path' ? (state.sortDir === 'asc' ? '▲' : '▼') : ''}`;
+  header.setAttribute('aria-sort', state.sortBy === 'path' ? (state.sortDir === 'asc' ? 'ascending' : 'descending') : 'none');
+}
+
+function updateViewModeControls() {
+  document.querySelectorAll('[data-view-mode]').forEach(button => {
+    const active = button.dataset.viewMode === state.viewMode;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
   });
 }
 
@@ -4263,6 +4664,11 @@ function updateDimFilterUI() {
 async function init() {
   // Load metadata
   state.metadata = migrateMetadata(await window.api.loadMetadata());
+  state.viewMode = state.metadata.viewMode === 'list' ? 'list' : 'grid';
+  if (state.viewMode === 'list') {
+    state.sortBy = 'path';
+    document.getElementById('sort-by').value = 'path';
+  }
 
   // Setup grid
   grid = new VirtualGrid(document.getElementById('grid-container'), {
@@ -4283,6 +4689,9 @@ async function init() {
       openCarousel(items, startIdx >= 0 ? startIdx : 0);
     },
   });
+  grid.setMode(state.viewMode);
+  updateViewModeControls();
+  updatePathHeader();
 
   galleryHoverPreview = setupGalleryHoverPreview();
 
@@ -4343,12 +4752,25 @@ async function init() {
     updateGrid();
   });
 
+  const searchHelp = document.getElementById('search-help-modal');
+  document.getElementById('btn-search-help').addEventListener('click', showSearchHelp);
+  searchHelp.querySelector('.modal-backdrop').addEventListener('click', hideSearchHelp);
+  searchHelp.querySelector('.modal-close').addEventListener('click', hideSearchHelp);
+  searchHelp.querySelector('#search-help-rows').addEventListener('click', (e) => {
+    const example = e.target.closest('[data-query]');
+    if (!example) return;
+    searchInput.value = example.dataset.query;
+    searchClear.classList.remove('hidden');
+    hideSearchHelp();
+    applySearchInput();
+  });
+
   document.getElementById('btn-rules').addEventListener('click', showRulesModal);
 
   // Sidebar "All" and "Untagged" clicks
   document.querySelectorAll('#tag-list > .tag-item').forEach(item => {
     item.addEventListener('click', () => {
-      state.currentFilter = item.dataset.filter;
+      selectSidebarFilter(item.dataset.filter);
       activateFilter();
       updateGrid();
     });
@@ -4416,6 +4838,7 @@ async function init() {
   });
 
   setupTagAutocomplete();
+  setupDetailResize();
   setupDetailZoom();
   setupBgModeBar('detail-bg-bar', 'detail-image-wrapper', 'detail-bg-color', 'detailBgMode');
   setupCarousel();
@@ -4517,7 +4940,9 @@ async function init() {
     }
 
     if (e.key === 'Escape') {
-      if (!document.getElementById('settings-modal').classList.contains('hidden')) {
+      if (!searchHelp.classList.contains('hidden')) {
+        hideSearchHelp();
+      } else if (!document.getElementById('settings-modal').classList.contains('hidden')) {
         hideSettingsModal();
       } else if (!document.getElementById('open-modal').classList.contains('hidden')) {
         hideOpenModal();
@@ -4634,7 +5059,7 @@ function showOpenModal() {
   // Pre-fill with last directory if available
   if (state.metadata.lastDirectory) {
     openModalState.path = state.metadata.lastDirectory;
-    document.getElementById('open-path-display').textContent = state.metadata.lastDirectory;
+    setTruncatedPath(document.getElementById('open-path-display'), state.metadata.lastDirectory);
     document.getElementById('open-path-display').classList.add('has-path');
     document.getElementById('open-recursive').checked = state.metadata.lastRecursive !== false;
     document.getElementById('open-confirm-btn').disabled = false;
@@ -4662,11 +5087,11 @@ function renderRecentDirs() {
   for (const dir of dirs) {
     const item = document.createElement('div');
     item.className = 'recent-dir-item';
-    item.textContent = dir;
+    setTruncatedPath(item, dir);
     item.title = dir;
     item.addEventListener('click', () => {
       openModalState.path = dir;
-      document.getElementById('open-path-display').textContent = dir;
+      setTruncatedPath(document.getElementById('open-path-display'), dir);
       document.getElementById('open-path-display').classList.add('has-path');
       document.getElementById('open-confirm-btn').disabled = false;
       runOpenCount();
@@ -4711,7 +5136,7 @@ function setupOpenModal() {
     const dirPath = await window.api.openDirectory();
     if (!dirPath) return;
     openModalState.path = dirPath;
-    document.getElementById('open-path-display').textContent = dirPath;
+    setTruncatedPath(document.getElementById('open-path-display'), dirPath);
     document.getElementById('open-path-display').classList.add('has-path');
     document.getElementById('open-confirm-btn').disabled = false;
     runOpenCount();
@@ -4746,11 +5171,13 @@ async function scanDirectory(dirPath, recursive) {
     state.allImages = files.sort();
     // Build lowercase index for fast search
     lowercaseIndex = new Map();
+    lowercaseBasenameIndex = new Map();
     for (const img of state.allImages) {
       lowercaseIndex.set(img, img.toLowerCase());
+      lowercaseBasenameIndex.set(img, basename(img).toLowerCase());
     }
     invalidateVisibleCache();
-    state.currentFilter = 'all';
+    selectSidebarFilter('all');
     state.searchQuery = '';
     state.dimFilter = null;
     document.getElementById('search-input').value = '';

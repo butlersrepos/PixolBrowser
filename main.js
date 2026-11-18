@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, nativeImage, shell } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
+const { resolveExternalEditor, openExternalFile } = require('./external-editor');
 
 // Metadata storage path
 const userDataPath = app.getPath('userData');
@@ -270,6 +271,27 @@ ipcMain.handle('save-file-dialog', async (_event, defaultName, buffer) => {
 ipcMain.handle('show-item-in-folder', (_event, filePath) => {
   shell.showItemInFolder(filePath);
   return true;
+});
+
+// Select an external editor application or executable
+ipcMain.handle('choose-external-editor', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choose external editor',
+    properties: ['openFile']
+  });
+  return result.canceled ? null : result.filePaths[0];
+});
+
+ipcMain.handle('get-external-editor', (_event, choice) => resolveExternalEditor(choice));
+
+ipcMain.handle('open-in-external-editor', async (_event, filePath, choice) => {
+  try {
+    const editor = await resolveExternalEditor(choice);
+    await openExternalFile(filePath, editor, shell);
+    return { ok: true, editor };
+  } catch (error) {
+    return { ok: false, error: error.message || 'Could not open image' };
+  }
 });
 
 // Copy file to system clipboard (macOS: pasteboard, so user can Cmd+V into Finder/apps)

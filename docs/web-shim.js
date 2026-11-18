@@ -25,6 +25,10 @@ async function walkDirectoryHandle(dirHandle, basePath, recursive, onFile) {
 }
 
 window.api = {
+  // Browsers cannot launch local programs.
+  getExternalEditor: async () => ({ name: null, path: null, source: 'default' }),
+  openInExternalEditor: async () => ({ ok: false, error: 'Unavailable in the web version' }),
+  chooseExternalEditor: null,
   openDirectory: async () => {
     try {
       _dirHandle = await window.showDirectoryPicker();
